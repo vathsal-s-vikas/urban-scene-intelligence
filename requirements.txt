@@ -1,0 +1,10 @@
+torch
+torchvision
+transformers
+pillow
+networkx
+matplotlib
+tqdm
+streamlit
+clip @ git+https://github.com/openai/CLIP.git
+sentencepiece

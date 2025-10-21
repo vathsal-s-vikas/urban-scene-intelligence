@@ -1,0 +1,239 @@
+{
+    "nodes": [
+        {
+            "id": "n1",
+            "label": "car",
+            "bbox": [
+                672.9033203125,
+                174.50079345703125,
+                898.3790893554688,
+                337.0697326660156
+            ],
+            "attributes": []
+        },
+        {
+            "id": "n2",
+            "label": "person",
+            "bbox": [
+                111.00068664550781,
+                205.35897827148438,
+                131.2040557861328,
+                260.98565673828125
+            ],
+            "attributes": []
+        },
+        {
+            "id": "n3",
+            "label": "car",
+            "bbox": [
+                284.72796630859375,
+                214.88247680664062,
+                325.0976257324219,
+                249.0136260986328
+            ],
+            "attributes": []
+        },
+        {
+            "id": "n4",
+            "label": "person",
+            "bbox": [
+                466.1009216308594,
+                203.548828125,
+                490.4681091308594,
+                254.1269073486328
+            ],
+            "attributes": []
+        },
+        {
+            "id": "n5",
+            "label": "traffic light",
+            "bbox": [
+                861.7955322265625,
+                68.92625427246094,
+                897.8505859375,
+                126.50482177734375
+            ],
+            "attributes": []
+        },
+        {
+            "id": "n6",
+            "label": "motorcycle",
+            "bbox": [
+                467.974609375,
+                211.72509765625,
+                489.216796875,
+                254.96670532226562
+            ],
+            "attributes": []
+        },
+        {
+            "id": "n7",
+            "label": "traffic light",
+            "bbox": [
+                905.4501953125,
+                11.633700370788574,
+                945.1605224609375,
+                49.62432098388672
+            ],
+            "attributes": []
+        },
+        {
+            "id": "n8",
+            "label": "traffic light",
+            "bbox": [
+                874.8251953125,
+                67.98893737792969,
+                904.3884887695312,
+                126.09814453125
+            ],
+            "attributes": []
+        }
+    ],
+    "edges": [
+        {
+            "source": "n1",
+            "target": "n2",
+            "relation": "right of"
+        },
+        {
+            "source": "n1",
+            "target": "n3",
+            "relation": "right of"
+        },
+        {
+            "source": "n1",
+            "target": "n4",
+            "relation": "right of"
+        },
+        {
+            "source": "n1",
+            "target": "n5",
+            "relation": "above"
+        },
+        {
+            "source": "n1",
+            "target": "n6",
+            "relation": "right of"
+        },
+        {
+            "source": "n1",
+            "target": "n7",
+            "relation": "above"
+        },
+        {
+            "source": "n1",
+            "target": "n8",
+            "relation": "above"
+        },
+        {
+            "source": "n2",
+            "target": "n3",
+            "relation": "left of"
+        },
+        {
+            "source": "n2",
+            "target": "n4",
+            "relation": "left of"
+        },
+        {
+            "source": "n2",
+            "target": "n5",
+            "relation": "left of"
+        },
+        {
+            "source": "n2",
+            "target": "n6",
+            "relation": "left of"
+        },
+        {
+            "source": "n2",
+            "target": "n7",
+            "relation": "left of"
+        },
+        {
+            "source": "n2",
+            "target": "n8",
+            "relation": "left of"
+        },
+        {
+            "source": "n3",
+            "target": "n4",
+            "relation": "left of"
+        },
+        {
+            "source": "n3",
+            "target": "n5",
+            "relation": "left of"
+        },
+        {
+            "source": "n3",
+            "target": "n6",
+            "relation": "left of"
+        },
+        {
+            "source": "n3",
+            "target": "n7",
+            "relation": "left of"
+        },
+        {
+            "source": "n3",
+            "target": "n8",
+            "relation": "left of"
+        },
+        {
+            "source": "n4",
+            "target": "n5",
+            "relation": "left of"
+        },
+        {
+            "source": "n4",
+            "target": "n6",
+            "relation": "below"
+        },
+        {
+            "source": "n4",
+            "target": "n7",
+            "relation": "left of"
+        },
+        {
+            "source": "n4",
+            "target": "n8",
+            "relation": "left of"
+        },
+        {
+            "source": "n5",
+            "target": "n6",
+            "relation": "right of"
+        },
+        {
+            "source": "n5",
+            "target": "n7",
+            "relation": "above"
+        },
+        {
+            "source": "n5",
+            "target": "n8",
+            "relation": "left of"
+        },
+        {
+            "source": "n6",
+            "target": "n7",
+            "relation": "left of"
+        },
+        {
+            "source": "n6",
+            "target": "n8",
+            "relation": "left of"
+        },
+        {
+            "source": "n7",
+            "target": "n8",
+            "relation": "below"
+        }
+    ],
+    "scene_attributes": {
+        "scene_type": "urban street",
+        "weather": "sunny",
+        "time_of_day": "daytime"
+    }
+}

@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Urban Scene Intelligence</title>
+</head>
+<body>
+  <h1>Urban Scene Intelligence</h1>
+  
+  <h3>Step 1: Upload Image</h3>
+  <input type="file" id="imageInput">
+  <button onclick="uploadImage()">Upload</button>
+
+  <h3>Original Image:</h3>
+  <img id="uploadedImage" width="400"><br>
+
+  <h3>Initial Description:</h3>
+  <p id="initialCaption"></p>
+
+  <h3>Step 2: Refine Description</h3>
+  <input type="text" id="userPrompt" placeholder="Add details or focus">
+  <button onclick="refineCaption()">Refine</button>
+
+  <h3>Refined Description:</h3>
+  <p id="refinedCaption"></p>
+
+<script>
+  let uploadedFilename = "";
+
+  async function uploadImage() {
+    const fileInput = document.getElementById("imageInput");
+    if(fileInput.files.length === 0) return alert("Select an image!");
+
+    const formData = new FormData();
+    formData.append("file", fileInput.files[0]);
+
+    const response = await fetch("http://127.0.0.1:8000/upload_image/", {
+      method: "POST",
+      body: formData
+    });
+    const data = await response.json();
+    uploadedFilename = fileInput.files[0].name;
+
+    document.getElementById("uploadedImage").src = "http://127.0.0.1:8000/get_image/?filename=" + uploadedFilename;
+    document.getElementById("initialCaption").innerText = data.initial_caption;
+  }
+
+  async function refineCaption() {
+    const prompt = document.getElementById("userPrompt").value;
+    if(!uploadedFilename) return alert("Upload an image first!");
+
+    const formData = new FormData();
+    formData.append("image_filename", uploadedFilename);
+    formData.append("user_prompt", prompt);
+
+    const response = await fetch("http://127.0.0.1:8000/refine_caption/", {
+      method: "POST",
+      body: formData
+    });
+    const data = await response.json();
+    document.getElementById("refinedCaption").innerText = data.refined_caption;
+  }
+</script>
+</body>
+</html>
