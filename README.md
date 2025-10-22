@@ -130,6 +130,47 @@ Upload image (Streamlit) → saved to `data/uploaded_image.jpg` → Stage1 detec
 
 ---
 
+## Testing & UI usage
+
+This project includes a Streamlit demo (`app.py`) and a small test script `test_graph_app.py` that exercises the scene-graph -> description flow. Below are instructions to run, test, and interact with the UI.
+
+1) Prepare your environment
+
+```powershell
+# create & activate venv (Windows PowerShell)
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+```
+
+2) Run the Streamlit app (manual UI testing)
+
+```powershell
+streamlit run app.py
+```
+
+How to interact with the UI
+- Open the URL printed by Streamlit (usually http://localhost:8501).
+- Use the sidebar file uploader to pick an image (`.jpg`, `.jpeg`, `.png`).
+- The app saves the uploaded image to `data/` and runs the detection + scene graph + description pipeline automatically. Watch the app output for each stage.
+- If you want to test with prepared data instead of uploading, copy an image into `data/test_images/` and modify `app.py` to load that file path directly (search for the `uploaded_file` handling section and replace with a hardcoded path), or use the 'Choose from sample images' UI if present.
+
+3) Run the test script (automated test)
+
+```powershell
+# from project root
+python test_graph_app.py
+```
+
+What the test does
+- `test_graph_app.py` will load a sample graph (`data/sample_entry1.json`) or a sample image from `data/test_images/` depending on its implementation. It runs the scene graph -> description generator and prints the output.
+- Use this to validate that changes to `description_generator.py` or `stage2_semantic_scene_graph.py` preserve expected behavior.
+
+4) Troubleshooting and tips
+- If Streamlit fails to start, make sure no other process is using port 8501 or run `streamlit run app.py --server.port 8502` to select a different port.
+- If object detection fails (missing weights), download YOLO weights to the project root (or update `stage1_object_detection.py` to point to an external path). Consider adding `scripts/download_weights.ps1` to automate this.
+- For CI, run `python -m pytest -q` after adding unit tests.
+
 ## Running, debugging & common pitfalls
 
 - Not a git repo: run `git init` then commit before creating branches.
