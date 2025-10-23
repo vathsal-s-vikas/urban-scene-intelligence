@@ -638,17 +638,20 @@ def generate_description_from_entry(entry: Dict, top_k_layout: int = 3, max_rela
     rel_sentences = []
     for (pred_l, obj_disp), subj_set in grouped.items():
         subj_list = sorted(list(subj_set))
-        # choose subject phrase naturally
+        # choose subject phrase naturally, and pick correct verb agreement
         subj_list_simple = []
         for sname in subj_list:
-            # if the subject display is plural, keep as-is; else add article
+            # if the subject surface (sname) is plural, keep as-is; else add article
             if _is_plural_surface(sname):
                 subj_list_simple.append(sname)
             else:
                 subj_list_simple.append(f"{_article_for(sname)} {sname}")
+
+        # Determine subject phrase and correct verb: single-plural agreement handled
         if len(subj_list_simple) == 1:
             subj_phrase = subj_list_simple[0]
-            verb_plur = "is"
+            # If the raw subj display (without article) is plural, use 'are' else 'is'
+            verb_plur = "are" if _is_plural_surface(subj_list[0]) else "is"
         else:
             subj_phrase = _human_join(subj_list_simple)
             verb_plur = "are"
