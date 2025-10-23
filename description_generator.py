@@ -1,773 +1,724 @@
-# description_generator.py
 """
-Non-recursive, cleaned-up graph-aware description generator.
+description_generator.py - Production-Ready Urban Scene Description Generator
 
-Provides:
- - generate_description_from_entry(entry) -> str
- - refine_description(entry, previous_description, user_instruction) -> str
- - compute_node_salience(entry) -> (scores_list, obj_ids, method)
- - get_cleaned_entry(entry) -> cleaned_entry (merged parts, deduped)
- - get_runtime_info(entry) -> dict
-
-Lightweight, deterministic; no torch dependency required.
+Features:
+- Aggressive noise filtering for Visual Genome data
+- Object deduplication and merging
+- Salience-based ranking (area + centrality)
+- Relationship clustering and natural language generation
+- Scene-level context understanding
+- Extensible architecture
 """
 
-from typing import Dict, List, Tuple, Optional
-import json, math, re
+from typing import Dict, List, Tuple, Optional, Set
+import re
+import math
+from collections import defaultdict
 
-# ----------------------
-# Basic geometry & naming helpers
-# ----------------------
-def _bbox(o: Dict) -> Tuple[float,float,float,float]:
-    x = float(o.get("x", 0)); y = float(o.get("y", 0))
-    w = float(o.get("w", 0)); h = float(o.get("h", 0))
-    return (x, y, x + w, y + h)
+# ============================================================
+# CONFIGURATION
+# ============================================================
+class Config:
+    """Central configuration for tunable parameters."""
+    # Salience
+    AREA_WEIGHT = 0.6
+    CENTRALITY_WEIGHT = 0.4
+    
+    # Generation limits
+    MAX_SALIENT_OBJECTS = 8
+    MAX_LAYOUT_ITEMS = 5
+    MAX_RELATIONS = 6
+    
+    # Deduplication
+    IOU_THRESHOLD = 0.7  # Intersection over union for bbox merging
+    NAME_SIMILARITY_THRESHOLD = 0.8
+    
+    # Filtering
+    MIN_OBJECT_AREA = 100  # pixels²
+    MIN_NAME_LENGTH = 2
 
-def _area(o: Dict) -> float:
-    x1,y1,x2,y2 = _bbox(o)
-    return max(0.0, (x2-x1)*(y2-y1))
 
-def _center(o: Dict) -> Tuple[float,float]:
-    x1,y1,x2,y2 = _bbox(o)
-    return ((x1+x2)/2.0, (y1+y2)/2.0)
+# ============================================================
+# CANONICALIZATION & CLEANING
+# ============================================================
+class NameCleaner:
+    """Handles all name cleaning and canonicalization."""
+    
+    SYNONYM_MAP = {
+        "male": "man", "female": "woman", "guy": "man", "lady": "woman",
+        "boy": "child", "girl": "child",
+        "auto": "car", "automobile": "car",
+        "bike": "bicycle", "cycle": "bicycle",
+        "roadway": "street", "footpath": "sidewalk",
+        "lamp": "streetlight", "lamp post": "streetlight",
+        "photograph": "scene", "photo": "scene", "image": "scene",
+        "edifice": "building", "structure": "building",
+        "vehicle": "car", "taxi cab": "taxi", "sport utility": "suv",
+    }
+    
+    NOISE_PATTERNS = [
+        r'^(see|there\s+(are?|is)|shows?|has|displays?)\s+',
+        r'\s+(on|in|of|at|shown|noted|found|visible|seen)\.?$',
+        r'^(photo|image|scene)\s+',
+        r'\s+\.$',  # trailing period
+    ]
+    
+    META_TERMS = {
+        "scene", "photo", "image", "view", "display", "shown", "noted",
+        "found", "visible", "seen", "nighttime", "daytime", "outdoor",
+        "indoor", "outside", "inside", "stories", "story",
+    }
+    
+    @classmethod
+    def extract_core_noun(cls, name: str) -> str:
+        """Extract meaningful noun from verbose Visual Genome names."""
+        if not name:
+            return ""
+        
+        name = name.lower().strip()
+        
+        # Remove noise patterns
+        for pattern in cls.NOISE_PATTERNS:
+            name = re.sub(pattern, '', name, flags=re.IGNORECASE)
+        
+        # Handle "X on/in Y" -> extract X
+        match = re.match(r'^([a-z]+)\s+(?:on|in|at|of)\s+', name, re.IGNORECASE)
+        if match:
+            name = match.group(1)
+        
+        # Handle "X shows/has Y" -> take Y
+        match = re.match(r'^.+?\s+(?:shows?|has)\s+(.+)', name, re.IGNORECASE)
+        if match:
+            name = match.group(1)
+        
+        # Clean whitespace and punctuation
+        name = re.sub(r'\s+', ' ', name).strip().rstrip('.,;:')
+        
+        return name
+    
+    @classmethod
+    def canonicalize(cls, name: str) -> str:
+        """Apply synonym mapping."""
+        name = name.lower().strip()
+        
+        # Check for partial matches in synonym map
+        for key, value in cls.SYNONYM_MAP.items():
+            if key in name:
+                return value
+        
+        return name
+    
+    @classmethod
+    def is_valid_name(cls, name: str) -> bool:
+        """Check if name is meaningful for descriptions."""
+        if not name or len(name) < Config.MIN_NAME_LENGTH:
+            return False
+        
+        # Check against meta-terms
+        name_lower = name.lower()
+        if any(term in name_lower for term in cls.META_TERMS):
+            return False
+        
+        # Must contain letters
+        if not re.search(r'[a-z]', name, re.IGNORECASE):
+            return False
+        
+        # Skip if ends with punctuation
+        if name.endswith('.'):
+            return False
+        
+        return True
+    
+    @classmethod
+    def clean_name(cls, obj: Dict) -> str:
+        """Full cleaning pipeline for an object."""
+        names = obj.get("names") or []
+        
+        if names and len(names) > 0:
+            name = names[0].replace("_", " ").strip()
+            name = cls.extract_core_noun(name)
+        else:
+            syns = obj.get("synsets") or []
+            if syns and len(syns) > 0:
+                name = syns[0].split(".")[0].replace("_", " ").strip()
+            else:
+                name = "object"
+        
+        name = cls.canonicalize(name)
+        return name if cls.is_valid_name(name) else ""
 
-def _iou(a: Dict, b: Dict) -> float:
-    ax1,ay1,ax2,ay2 = _bbox(a)
-    bx1,by1,bx2,by2 = _bbox(b)
-    ix1 = max(ax1,bx1); iy1 = max(ay1,by1)
-    ix2 = min(ax2,bx2); iy2 = min(ay2,by2)
-    iw = max(0.0, ix2-ix1); ih = max(0.0, iy2-iy1)
-    inter = iw*ih
-    area_a = max(0.0, (ax2-ax1)*(ay2-ay1))
-    area_b = max(0.0, (bx2-bx1)*(by2-by1))
-    uni = area_a + area_b - inter
-    return inter/uni if uni > 0 else 0.0
 
-def _norm_name(o: Dict) -> str:
-    names = o.get("names") or []
-    if names and len(names)>0:
-        return names[0].replace("_"," ").strip().lower()
-    syns = o.get("synsets") or []
-    if syns and len(syns)>0:
-        return syns[0].split(".")[0].replace("_"," ").strip().lower()
-    return "object"
+# ============================================================
+# SEMANTIC CATEGORIES
+# ============================================================
+class SemanticCategories:
+    """Coarse semantic grouping for urban scene elements."""
+    
+    CATEGORIES = {
+        "person": {"man", "woman", "person", "child", "boy", "girl", "people", 
+                   "pedestrian", "cyclist"},
+        "vehicle": {"car", "bus", "truck", "van", "bicycle", "motorcycle", 
+                    "taxi", "suv", "vehicle", "scooter"},
+        "tree": {"tree", "plant", "bush", "vegetation"},
+        "infrastructure": {"road", "street", "sidewalk", "building", "pole", 
+                          "sign", "traffic light", "crosswalk", "window", 
+                          "door", "wall", "streetlight", "bench"},
+        "sky": {"sky", "cloud", "sun"},
+    }
+    
+    @classmethod
+    def categorize(cls, name: str) -> str:
+        """Return coarse category for a name."""
+        name_lower = name.lower()
+        
+        for category, terms in cls.CATEGORIES.items():
+            if name_lower in terms:
+                return category
+        
+        return "object"
 
-# ----------------------
-# Coarse label mapping
-# ----------------------
-COARSE_MAP = {
-    "person":"person","man":"person","woman":"person","guy":"person","boy":"person",
-    "bicycle":"bicycle","bike":"bicycle","bikes":"bicycle",
-    "car":"vehicle","truck":"vehicle","van":"vehicle","work truck":"vehicle","taxi":"vehicle",
-    "building":"building","wall":"building","window":"building","windows":"building",
-    "tree":"tree","trees":"tree","tree trunk":"tree",
-    "sidewalk":"infrastructure","street":"infrastructure","road":"infrastructure",
-    "parking meter":"infrastructure","lamp post":"infrastructure","lamp":"infrastructure","bench":"infrastructure"
-}
-PART_KEYWORDS = {"shoe","shoes","sneaker","sneakers","chin","arm","back","glasses","jacket","shirt","pants","trouser","headlight"}
 
-def _coarse_label(name: str) -> str:
-    n = name.lower()
-    if n in COARSE_MAP:
-        return COARSE_MAP[n]
-    for k,v in COARSE_MAP.items():
-        if k in n:
-            return v
-    for p in PART_KEYWORDS:
-        if p in n:
-            return "part"
-    if any(tok in n for tok in ["building","house","store","shop"]):
-        return "building"
-    return "object"
+# ============================================================
+# GEOMETRIC UTILITIES
+# ============================================================
+class GeometryUtils:
+    """Bounding box operations."""
+    
+    @staticmethod
+    def bbox_area(obj: Dict) -> float:
+        """Calculate bbox area."""
+        w = float(obj.get("w", 0))
+        h = float(obj.get("h", 0))
+        return w * h
+    
+    @staticmethod
+    def bbox_center(obj: Dict) -> Tuple[float, float]:
+        """Get bbox center coordinates."""
+        x = float(obj.get("x", 0))
+        y = float(obj.get("y", 0))
+        w = float(obj.get("w", 0))
+        h = float(obj.get("h", 0))
+        return (x + w / 2, y + h / 2)
+    
+    @staticmethod
+    def iou(obj1: Dict, obj2: Dict) -> float:
+        """Calculate intersection over union between two bboxes."""
+        x1 = float(obj1.get("x", 0))
+        y1 = float(obj1.get("y", 0))
+        w1 = float(obj1.get("w", 0))
+        h1 = float(obj1.get("h", 0))
+        
+        x2 = float(obj2.get("x", 0))
+        y2 = float(obj2.get("y", 0))
+        w2 = float(obj2.get("w", 0))
+        h2 = float(obj2.get("h", 0))
+        
+        # Calculate intersection
+        x_left = max(x1, x2)
+        y_top = max(y1, y2)
+        x_right = min(x1 + w1, x2 + w2)
+        y_bottom = min(y1 + h1, y2 + h2)
+        
+        if x_right < x_left or y_bottom < y_top:
+            return 0.0
+        
+        intersection = (x_right - x_left) * (y_bottom - y_top)
+        area1 = w1 * h1
+        area2 = w2 * h2
+        union = area1 + area2 - intersection
+        
+        return intersection / union if union > 0 else 0.0
+    
+    @staticmethod
+    def distance(obj1: Dict, obj2: Dict) -> float:
+        """Euclidean distance between bbox centers."""
+        c1 = GeometryUtils.bbox_center(obj1)
+        c2 = GeometryUtils.bbox_center(obj2)
+        return math.sqrt((c1[0] - c2[0])**2 + (c1[1] - c2[1])**2)
 
-# ----------------------
-# Collect relations safely
-# ----------------------
-def _collect_relations(entry: Dict) -> List[Tuple[int,str,int]]:
-    rels = []
-    for r in entry.get("relationships", []):
-        try:
-            sid = int(r.get("subject_id"))
-            oid = int(r.get("object_id"))
-            pred = (r.get("predicate") or "").strip()
-            if pred:
+
+# ============================================================
+# OBJECT DEDUPLICATION
+# ============================================================
+class ObjectDeduplicator:
+    """Merge duplicate/overlapping objects."""
+    
+    @staticmethod
+    def deduplicate(objects: List[Dict]) -> List[Dict]:
+        """Merge highly overlapping objects with similar names."""
+        if not objects:
+            return []
+        
+        # Sort by area (largest first)
+        sorted_objs = sorted(objects, key=GeometryUtils.bbox_area, reverse=True)
+        
+        merged = []
+        used_indices = set()
+        
+        for i, obj1 in enumerate(sorted_objs):
+            if i in used_indices:
+                continue
+            
+            # Start a cluster with this object
+            cluster = [obj1]
+            name1 = NameCleaner.clean_name(obj1)
+            
+            for j, obj2 in enumerate(sorted_objs[i+1:], start=i+1):
+                if j in used_indices:
+                    continue
+                
+                name2 = NameCleaner.clean_name(obj2)
+                
+                # Check if they should be merged
+                iou = GeometryUtils.iou(obj1, obj2)
+                same_name = (name1 == name2)
+                
+                if iou > Config.IOU_THRESHOLD and same_name:
+                    cluster.append(obj2)
+                    used_indices.add(j)
+            
+            # Merge cluster into single object
+            merged_obj = ObjectDeduplicator._merge_cluster(cluster)
+            merged.append(merged_obj)
+            used_indices.add(i)
+        
+        return merged
+    
+    @staticmethod
+    def _merge_cluster(cluster: List[Dict]) -> Dict:
+        """Merge a cluster of objects into one representative."""
+        if len(cluster) == 1:
+            return cluster[0]
+        
+        # Take bbox from largest object
+        largest = max(cluster, key=GeometryUtils.bbox_area)
+        merged = dict(largest)
+        
+        # Merge attributes (unique)
+        all_attrs = set()
+        for obj in cluster:
+            attrs = obj.get("attributes") or []
+            all_attrs.update(a.strip() for a in attrs if isinstance(a, str))
+        
+        merged["attributes"] = sorted(list(all_attrs))
+        
+        return merged
+
+
+# ============================================================
+# SALIENCE COMPUTATION
+# ============================================================
+class SalienceComputer:
+    """Compute object importance scores."""
+    
+    @staticmethod
+    def compute(objects: List[Dict], image_width: int = 800, image_height: int = 600) -> Dict[int, float]:
+        """
+        Compute salience scores combining area and centrality.
+        Returns: {object_id: salience_score}
+        """
+        if not objects:
+            return {}
+        
+        scores = {}
+        img_center = (image_width / 2, image_height / 2)
+        max_distance = math.sqrt(img_center[0]**2 + img_center[1]**2)
+        
+        # Calculate max area for normalization
+        areas = [GeometryUtils.bbox_area(o) for o in objects]
+        max_area = max(areas) if areas else 1.0
+        
+        for obj in objects:
+            oid = int(obj.get("object_id", 0))
+            
+            # Area component (larger = more salient)
+            area = GeometryUtils.bbox_area(obj)
+            area_score = area / max_area if max_area > 0 else 0.0
+            
+            # Centrality component (closer to center = more salient)
+            center = GeometryUtils.bbox_center(obj)
+            dist = math.sqrt((center[0] - img_center[0])**2 + (center[1] - img_center[1])**2)
+            centrality_score = 1.0 - (dist / max_distance) if max_distance > 0 else 0.0
+            
+            # Combined score
+            scores[oid] = (Config.AREA_WEIGHT * area_score + 
+                          Config.CENTRALITY_WEIGHT * centrality_score)
+        
+        return scores
+
+
+# ============================================================
+# RELATIONSHIP PROCESSING
+# ============================================================
+class RelationshipProcessor:
+    """Clean and rank relationships."""
+    
+    WEAK_PREDICATES = {
+        "is", "are", "was", "were", "see", "visible", "appears", 
+        "looks", "looking", "shown", "shows", "found", "noted", 
+        "taken", "of", "see street", "see tail  light"
+    }
+    
+    @staticmethod
+    def collect_relations(entry: Dict, id2name: Dict[int, str]) -> List[Tuple[int, str, int]]:
+        """Extract and clean relationship triples."""
+        rels = []
+        
+        for r in entry.get("relationships", []):
+            try:
+                sid = int(r.get("subject_id"))
+                oid = int(r.get("object_id"))
+                pred = (r.get("predicate") or "").strip().lower()
+                
+                if not pred or len(pred) < 2:
+                    continue
+                
+                # Skip weak predicates
+                if pred in RelationshipProcessor.WEAK_PREDICATES:
+                    continue
+                
+                # Skip if subject/object not in cleaned objects
+                if sid not in id2name or oid not in id2name:
+                    continue
+                
+                # Skip self-references
+                subj_name = id2name[sid]
+                obj_name = id2name[oid]
+                if subj_name == obj_name:
+                    continue
+                if subj_name in obj_name or obj_name in subj_name:
+                    continue
+                
                 rels.append((sid, pred, oid))
-        except Exception:
-            continue
-    return rels
-
-# ----------------------
-# Merge small "parts" into parent objects (wearing/holding/windows)
-# ----------------------
-def _merge_parts_and_windows(entry: Dict, area_thresh_ratio: float = 0.02) -> Dict:
-    cleaned = json.loads(json.dumps(entry))
-    objs = cleaned.get("objects", [])
-    if not objs:
-        return cleaned
-    id2obj = {int(o["object_id"]): o for o in objs}
-    remove_ids = set()
-
-    # attach objects referenced by wearing/holding relations to subject
-    attach_preds = {"wears","wearing","wear","holding","hold","has","have","wea ring","WEARING"}
-    for r in entry.get("relationships", []):
-        pred = (r.get("predicate") or "").lower()
-        try:
-            sid = int(r.get("subject_id")); oid = int(r.get("object_id"))
-        except Exception:
-            continue
-        if pred and any(k in pred for k in attach_preds) and sid in id2obj and oid in id2obj:
-            subj = id2obj[sid]; obj = id2obj[oid]
-            subj_attrs = subj.get("attributes") or []
-            oname = _norm_name(obj)
-            # merge object's attributes and name as attribute of subject
-            for a in (obj.get("attributes") or []):
-                if a not in subj_attrs:
-                    subj_attrs.append(a)
-            if oname and oname not in subj_attrs:
-                subj_attrs.append(oname)
-            subj["attributes"] = subj_attrs
-            remove_ids.add(oid)
-
-    # attach windows to nearest building if overlapping
-    for oid, o in list(id2obj.items()):
-        if oid in remove_ids:
-            continue
-        name = _norm_name(o)
-        if "window" in name:
-            best_bid = None; best_iou = 0.0
-            for bid, b in id2obj.items():
-                if bid == oid or bid in remove_ids: continue
-                if "building" not in _coarse_label(_norm_name(b)):
-                    continue
-                i = _iou(o, b)
-                if i > best_iou:
-                    best_iou = i; best_bid = bid
-            if best_bid is not None and best_iou > 0.04:
-                b = id2obj[best_bid]
-                b_attrs = b.get("attributes") or []
-                if "windows" not in b_attrs:
-                    b_attrs.append("windows")
-                b["attributes"] = b_attrs
-                remove_ids.add(oid)
-
-    # merge tiny parts into nearest parent (person/vehicle/building) if inside bbox
-    xs = [float(o.get("x",0)) for o in objs]; ws = [float(o.get("w",0)) for o in objs]
-    ys = [float(o.get("y",0)) for o in objs]; hs = [float(o.get("h",0)) for o in objs]
-    max_x = max([x+w for x,w in zip(xs,ws)]) if xs else 1.0
-    max_y = max([y+h for y,h in zip(ys,hs)]) if ys else 1.0
-    img_area = max_x * max_y if max_x>0 and max_y>0 else 1.0
-
-    for oid, o in list(id2obj.items()):
-        if oid in remove_ids:
-            continue
-        name = _norm_name(o)
-        if _coarse_label(name) != "part":
-            continue
-        a = _area(o)
-        if a < area_thresh_ratio * img_area:
-            cx, cy = _center(o)
-            best_pid = None; best_dist = float("inf")
-            for pid, p in id2obj.items():
-                if pid == oid or pid in remove_ids: continue
-                if _coarse_label(_norm_name(p)) not in ("person","vehicle","building"):
-                    continue
-                x1,y1,x2,y2 = _bbox(p)
-                if not (x1 <= cx <= x2 and y1 <= cy <= y2):
-                    continue
-                px, py = _center(p)
-                dist = (px-cx)**2 + (py-cy)**2
-                if dist < best_dist:
-                    best_dist = dist; best_pid = pid
-            if best_pid:
-                parent = id2obj[best_pid]
-                p_attrs = parent.get("attributes") or []
-                for at in (o.get("attributes") or []):
-                    if at not in p_attrs:
-                        p_attrs.append(at)
-                oname = _norm_name(o)
-                if oname not in p_attrs and len(oname) < 24:
-                    p_attrs.append(oname)
-                parent["attributes"] = p_attrs
-                remove_ids.add(oid)
-
-    new_objs = [o for o in objs if int(o.get("object_id")) not in remove_ids]
-    new_rels = []
-    for r in entry.get("relationships", []):
-        try:
-            sid = int(r.get("subject_id")); oid = int(r.get("object_id"))
-            if sid in remove_ids or oid in remove_ids:
+                
+            except Exception:
                 continue
-            new_rels.append(r)
-        except Exception:
-            continue
+        
+        return rels
+    
+    @staticmethod
+    def normalize_predicate(pred: str) -> str:
+        """Normalize predicate to canonical form."""
+        pred = pred.lower().strip()
+        
+        # Spatial relations
+        if pred in ("on", "on top of", "atop"):
+            return "on"
+        if pred in ("by", "near", "next to", "beside", "along"):
+            return "near"
+        if pred in ("in front of", "in front"):
+            return "in front of"
+        if pred in ("behind", "in back of"):
+            return "behind"
+        if "park" in pred:
+            return "parked near"
+        
+        # Attribute relations
+        if "wear" in pred or "has" in pred:
+            return "wearing"
+        
+        return pred
 
-    cleaned["objects"] = new_objs
-    cleaned["relationships"] = new_rels
-    return cleaned
 
-# ----------------------
-# Deduplication (merge overlapping objects of same coarse type)
-# ----------------------
-def _dedupe_objects(entry: Dict, iou_thresh: float = 0.6, attr_merge_iou: float = 0.8) -> Dict:
-    cleaned = json.loads(json.dumps(entry))
-    objs = cleaned.get("objects", [])
-    keep = []
-    used = set()
-    for i, o in enumerate(objs):
-        if i in used: continue
-        group = [o]
-        for j in range(i+1, len(objs)):
-            if j in used: continue
-            if _coarse_label(_norm_name(o)) != _coarse_label(_norm_name(objs[j])):
-                continue
-            if _iou(o, objs[j]) >= iou_thresh:
-                group.append(objs[j]); used.add(j)
-        rep = max(group, key=lambda x: _area(x))
-        rep_attrs = rep.get("attributes") or []
-        for m in group:
-            if m is rep: continue
-            if _iou(m, rep) >= attr_merge_iou:
-                for a in (m.get("attributes") or []):
-                    if a not in rep_attrs:
-                        rep_attrs.append(a)
-        rep["attributes"] = rep_attrs
-        keep.append(rep)
-    cleaned["objects"] = keep
-    valid_ids = {int(o["object_id"]) for o in keep}
-    new_rels = []
-    for r in cleaned.get("relationships", []):
-        try:
-            sid = int(r.get("subject_id")); oid = int(r.get("object_id"))
-            if sid in valid_ids and oid in valid_ids:
-                new_rels.append(r)
-        except Exception:
-            continue
-    cleaned["relationships"] = new_rels
-    return cleaned
-
-# ----------------------
-# Hybrid salience: area + degree in relation graph
-# ----------------------
-def compute_node_salience(entry: Dict) -> Tuple[List[float], List[int], str]:
-    objs = entry.get("objects", [])
-    if not objs:
-        return [], [], "area"
-    areas = [_area(o) for o in objs]
-    max_a = max(areas) if areas else 1.0
-    id2idx = {int(o["object_id"]): idx for idx,o in enumerate(objs)}
-    deg = [0]*len(objs)
-    for sid,_,oid in _collect_relations(entry):
-        if sid in id2idx: deg[id2idx[sid]] += 1
-        if oid in id2idx: deg[id2idx[oid]] += 1
-    max_deg = max(deg) if deg else 1
-    norm_areas = [a/max_a for a in areas]
-    norm_deg = [d/max_deg for d in deg]
-    scores = [na + 0.5*nd for na,nd in zip(norm_areas, norm_deg)]
-    maxs = max(scores) if scores else 1.0
-    scores = [s/maxs for s in scores]
-    obj_ids = [int(o["object_id"]) for o in objs]
-    return scores, obj_ids, "hybrid"
-
-# ----------------------
-# Serialize cleaned facts (single non-recursive function)
-# ----------------------
-def _serialize_cleaned_facts(entry: Dict, top_k_rels: int = 8):
-    merged = _merge_parts_and_windows(entry)
-    cleaned = _dedupe_objects(merged)
-    objs = cleaned.get("objects", [])
-    rels = _collect_relations(cleaned)
-    scores, obj_ids, method = compute_node_salience(cleaned)
-    id2score = {oid: sc for oid, sc in zip(obj_ids, scores)} if obj_ids else {}
-    id2obj = {int(o["object_id"]): o for o in objs}
-
-    ordered_ids = sorted([int(o["object_id"]) for o in objs], key=lambda i: -id2score.get(i,0.0))
-    facts_objs = []
-    for oid in ordered_ids:
-        o = id2obj.get(oid)
-        if not o: 
-            continue
-        name = _norm_name(o)
-        coarse = _coarse_label(name)
-        if coarse == "part":
-            continue
-        # Keep display as the canonical name only (do not embed small attributes).
-        display = name
-        facts_objs.append((oid, display, coarse, id2score.get(oid, 0.0)))
-
-    def rel_score(t):
-        sid,pred,oid = t
-        s = id2score.get(int(sid), 0.0); o_ = id2score.get(int(oid), 0.0)
-        pred_w = 2.0 if pred.lower() not in ("near","on","in","") else 0.5
-        return s + o_ + pred_w
-    rels_sorted = sorted(rels, key=rel_score, reverse=True)[:top_k_rels]
-
-    scene_attrs = entry.get("scene_attributes", {}) or {}
-    scene_desc = []
-    if scene_attrs.get("time_of_day"): scene_desc.append(scene_attrs["time_of_day"])
-    if scene_attrs.get("weather"): scene_desc.append(scene_attrs["weather"])
-    return cleaned, facts_objs, rels_sorted, scene_desc, id2score, method
-
-# ----------------------
-# Realization: compose a coherent paragraph (deterministic)
-# ----------------------
-def _pluralize_label(label: str, n: int) -> str:
-    if label == "person":
-        return f"{n} pedestrian{'s' if n!=1 else ''}"
-    if label == "bicycle":
-        return f"{n} bike{'s' if n!=1 else ''}"
-    if label == "vehicle":
-        return f"{n} vehicle{'s' if n!=1 else ''}"
-    return f"{n} {label}{'s' if n!=1 else ''}"
-
-def _safe_prefix(display: str, count: int = 1) -> str:
-    last = display.split()[-1] if display else ""
-    if count > 1 or last.endswith("s"):
-        return display
-    if display.startswith(("a ","an ","the ")):
-        return display
-    return "a " + display
-
-def _format_person_clothing(o: Dict) -> Optional[str]:
-    attrs = o.get("attributes") or []
-    garments = {}
-    colors = []
-    for a in attrs:
-        al = a.lower()
-        m = re.match(r"(red|blue|grey|gray|black|white|brown|orange)\s+(\w+)", al)
-        if m:
-            c,g = m.group(1), m.group(2)
-            garments.setdefault(g, []).append(c)
-            continue
-        if al in ("red","blue","grey","gray","black","white","brown","orange"):
-            colors.append(al)
-        if al in ("shirt","jacket","pants","trousers","sneakers","shoes"):
-            garments.setdefault(al, [])
-    parts = []
-    for g, cols in garments.items():
-        if cols:
-            parts.append(f"{' and '.join(cols)} {g}")
+# ============================================================
+# TEXT GENERATION UTILITIES
+# ============================================================
+class TextUtils:
+    """Natural language generation helpers."""
+    
+    @staticmethod
+    def article_for(word: str) -> str:
+        """Get appropriate article (a/an)."""
+        if not word:
+            return "a"
+        return "an" if word[0].lower() in "aeiou" else "a"
+    
+    @staticmethod
+    def pluralize(label: str, count: int) -> str:
+        """Create count phrase (e.g., '3 cars')."""
+        if count == 1:
+            return f"1 {label}"
+        
+        if label.endswith("y") and label not in ("day", "boy", "toy", "way"):
+            plural = label[:-1] + "ies"
+        elif label.endswith("s"):
+            plural = label
         else:
-            parts.append(g)
-    if not parts and colors:
-        parts.append("clothing in " + " and ".join(colors))
-    if parts:
-        return "wearing " + ", ".join(parts)
-    return None
+            plural = label + "s"
+        
+        return f"{count} {plural}"
+    
+    @staticmethod
+    def human_join(items: List[str]) -> str:
+        """Join list with commas and 'and'."""
+        if not items:
+            return ""
+        if len(items) == 1:
+            return items[0]
+        if len(items) == 2:
+            return f"{items[0]} and {items[1]}"
+        return ", ".join(items[:-1]) + ", and " + items[-1]
 
-# --- small helper additions for better English ---
-def _article_for(word: str) -> str:
-    """Return 'a' or 'an' for a surface word using a simple vowel heuristic."""
-    if not word:
-        return "a"
-    w = word.strip().lower()
-    if w[0] in "aeiou":
-        return "an"
-    return "a"
 
-def _human_join(items: List[str]) -> str:
-    """Join a list into 'x, y and z' form (Oxford comma optional)."""
-    if not items:
-        return ""
-    if len(items) == 1:
-        return items[0]
-    if len(items) == 2:
-        return items[0] + " and " + items[1]
-    return ", ".join(items[:-1]) + ", and " + items[-1]
-
-def _clean_display(s: str) -> str:
-    return s.replace("  ", " ").strip()
-
-# improved clothing formatting (slight modification of previous)
-def _format_person_clothing(o: Dict) -> Optional[str]:
-    attrs = o.get("attributes") or []
-    garments = {}
-    colors = []
-    for a in attrs:
-        al = a.lower().strip()
-        m = re.match(r"(red|blue|grey|gray|black|white|brown|orange|green)\s+(\w+)", al)
-        if m:
-            c,g = m.group(1), m.group(2)
-            garments.setdefault(g, []).append(c)
+# ============================================================
+# MAIN GENERATOR
+# ============================================================
+def generate_description_from_entry(
+    entry: Dict,
+    max_objects: int = None,
+    max_relations: int = None,
+) -> str:
+    """
+    Generate natural language description from scene graph.
+    
+    Args:
+        entry: Visual Genome-style scene graph dict
+        max_objects: Max salient objects to mention (default: Config.MAX_SALIENT_OBJECTS)
+        max_relations: Max relationships to describe (default: Config.MAX_RELATIONS)
+    
+    Returns:
+        Natural language description string
+    """
+    if max_objects is None:
+        max_objects = Config.MAX_SALIENT_OBJECTS
+    if max_relations is None:
+        max_relations = Config.MAX_RELATIONS
+    
+    # Step 1: Clean and filter objects
+    raw_objects = entry.get("objects", [])
+    
+    cleaned_objects = []
+    for obj in raw_objects:
+        name = NameCleaner.clean_name(obj)
+        if not name:
             continue
-        if al in ("red","blue","grey","gray","black","white","brown","orange","green"):
-            colors.append(al)
-        if al in ("shirt","jacket","pants","trousers","sneakers","shoes"):
-            garments.setdefault(al, [])
+        
+        area = GeometryUtils.bbox_area(obj)
+        if area < Config.MIN_OBJECT_AREA:
+            continue
+        
+        cleaned_objects.append(obj)
+    
+    # Step 2: Deduplicate
+    cleaned_objects = ObjectDeduplicator.deduplicate(cleaned_objects)
+    
+    if not cleaned_objects:
+        return "This is an urban street scene."
+    
+    # Step 3: Compute salience
+    salience_scores = SalienceComputer.compute(cleaned_objects)
+    
+    # Sort by salience
+    sorted_objects = sorted(
+        cleaned_objects,
+        key=lambda o: salience_scores.get(int(o.get("object_id", 0)), 0.0),
+        reverse=True
+    )
+    
+    # Build id->name mapping
+    id2name = {
+        int(o.get("object_id")): NameCleaner.clean_name(o)
+        for o in sorted_objects
+    }
+    
+    # Step 4: Process relationships
+    relations = RelationshipProcessor.collect_relations(entry, id2name)
+    
+    # Normalize predicates
+    normalized_rels = [
+        (sid, RelationshipProcessor.normalize_predicate(pred), oid)
+        for sid, pred, oid in relations
+    ]
+    
+    # Step 5: Generate text
     parts = []
-    for g, cols in garments.items():
-        if cols:
-            parts.append(f"{_human_join(cols)} {g}")
-        else:
-            parts.append(g)
-    if not parts and colors:
-        parts.append("clothing in " + _human_join(colors))
-    if parts:
-        return "wearing " + _human_join(parts)
-    return None
-
-def _better_pluralize_label(label: str, n: int) -> str:
-    # nicer labels for counts
-    if label in ("person", "people", "man", "guy"):
-        return f"{n} pedestrian{'s' if n != 1 else ''}"
-    if label in ("bicycle", "bike", "bikes"):
-        return f"{n} bike{'s' if n != 1 else ''}"
-    if label == "vehicle":
-        return f"{n} vehicle{'s' if n != 1 else ''}"
-    if label == "building":
-        return f"{n} building{'s' if n != 1 else ''}"
-    if label == "tree":
-        return f"{n} tree{'s' if n != 1 else ''}"
-    if label == "infrastructure":
-        return f"{n} infrastructure element{'s' if n != 1 else ''}"
-    return f"{n} {label}{'s' if n != 1 else ''}"
-
-# --- main improved realization using display names ---
-
-# -------------------------
-# Minor-tuning helpers (normalize, prune, humanize)
-# -------------------------
-def _normalize_display_name(display: str) -> str:
-    """Apply small normalizations to display names to avoid placeholders and repeated words."""
-    if not display:
-        return display
-    d = display.strip()
-    # normalize common forms
-    d = re.sub(r"\bside ?walk\b", "sidewalk", d, flags=re.I)
-    d = re.sub(r"\blamp post\b", "lamp post", d, flags=re.I)
-    d = re.sub(r"\bparking meter\b", "parking meter", d, flags=re.I)
-    d = re.sub(r"\bwork truck\b", "work truck", d, flags=re.I)
-    d = re.sub(r"\bwindow(s)?\b", "windows", d, flags=re.I)
-    d = re.sub(r"\bsign\b", "sign", d, flags=re.I)
-    # collapse duplicated adjacent words "sidewalk sidewalk" -> "sidewalk"
-    d = re.sub(r"\b(\w+)(?: \1\b)+", r"\1", d, flags=re.I)
-    return d
-
-# ---------- plural/article helpers ----------
-def _is_plural_surface(s: str) -> bool:
-    """Rudimentary plural detector for surface display tokens."""
-    if not s:
-        return False
-    s = s.strip().lower()
-    # treat obvious plurals ending with s (but ignore short words like 'us', 'as')
-    if len(s) > 3 and s.endswith("s") and not s.endswith("ss"):
-        return True
-    # some known group tokens
-    if s in ("trees","windows","bikes","people"):
-        return True
-    return False
-
-def _singularize_surface(s: str) -> str:
-    """Naive singularizer for display tokens (used only for article insertion)."""
-    if _is_plural_surface(s):
-        return s[:-1]
-    return s
-
-def _format_with_article_for_surface(display: str) -> str:
-    """Return either 'a X' or 'X' (no article) depending on plural detection."""
-    if not display:
-        return ""
-    if _is_plural_surface(display):
-        return display  # plural — do not prefix with 'a/an'
-    return f"{_article_for(display)} {display}"
-
-def _prune_relations(rels_sorted: List[Tuple[int,str,int]], cleaned_objs: List[Dict], max_rels: int = 6):
-    """
-    Prune low-value or duplicate relations from rels_sorted.
-    Keeps up to max_rels, prefers informative predicates and removes relations involving 'part' nodes.
-    """
-    def _get_obj(oid):
-        return next((x for x in cleaned_objs if int(x["object_id"]) == int(oid)), None)
-
-    seen = set()
-    out = []
-    for sid, pred, oid in rels_sorted:
-        subj = _get_obj(sid); obj = _get_obj(oid)
-        if not subj or not obj:
-            continue
-        # skip if either is a 'part' (we merge parts earlier)
-        if _coarse_label(_norm_name(subj)) == "part" or _coarse_label(_norm_name(obj)) == "part":
-            continue
-        pred_norm = (pred or "").strip().lower()
-        subj_disp = _normalize_display_name(_norm_name(subj))
-        obj_disp = _normalize_display_name(_norm_name(obj))
-        key = (pred_norm, subj_disp, obj_disp)
-        if key in seen:
-            continue
-        # deprioritize extremely generic relations if we already have enough
-        if pred_norm in ("has","have","contain","holding") and len(out) >= max_rels:
-            continue
-        seen.add(key)
-        out.append((sid, pred, oid))
-        if len(out) >= max_rels:
-            break
-    return out
-
-def _normalize_attribute_phrase(coarse: str, attrs: List[str], display: str) -> Optional[str]:
-    """
-    Build a short human-friendly attribute phrase for an object display string.
-    Returns None if nothing useful.
-    """
-    if not attrs:
-        return None
-    norm_attrs = [a.strip() for a in attrs if a and isinstance(a, str)]
-    if not norm_attrs:
-        return None
-    # vehicle headlights off -> produce explicit phrase
-    if coarse == "vehicle" and any(a.lower() == "off" for a in norm_attrs):
-        return f"{display} with headlights off"
-    # parked
-    if "parked" in [a.lower() for a in norm_attrs]:
-        return f"{display} that is parked"
-    # chained/locked bikes
-    if coarse == "bicycle" and any("chained" in a.lower() or "locked" in a.lower() for a in norm_attrs):
-        return f"{display} that is chained"
-    # parking meter color or small detail
-    if "parking meter" in display and norm_attrs:
-        return f"{display} that is {norm_attrs[0]}"
-    # otherwise show up to two concise attrs not duplicating display term
-    chosen = []
-    for a in norm_attrs:
-        if a.lower() in display.lower():
-            continue
-        if a not in chosen:
-            chosen.append(a)
-        if len(chosen) >= 2:
-            break
-    if chosen:
-        return f"{display} that is {_human_join(chosen)}"
-    return None
-
-
-def generate_description_from_entry(entry: Dict, top_k_layout: int = 3, max_relations: int = 6) -> str:
-    """
-    Deterministic description generator (minor tuned):
-     - uses name-only display tokens
-     - prunes/normalizes relations
-     - builds attribute phrases without duplication
-     - avoids counting generic 'object' and renames 'infrastructure' to 'street elements'
-    """
-    cleaned, facts_objs, rels_sorted, scene_desc, id2score, method = _serialize_cleaned_facts(entry, top_k_rels=24)
-    cleaned_objs = cleaned.get("objects", []) if cleaned else []
-
-    # Normalize display names in facts list (but keeps display = name)
-    facts_objs = [(oid, _normalize_display_name(display), coarse, sc) for (oid, display, coarse, sc) in facts_objs]
-
-    # Prune relations (use the helper you already added)
-    rels_sorted = _prune_relations(rels_sorted, cleaned_objs, max_rels=max_relations)
-
-    # Build id->display mapping and keep attribute lists separate
-    id2display = {}
-    for oid, display, coarse, score in facts_objs:
-        id2display[int(oid)] = display
-    for o in cleaned_objs:
-        oid = int(o["object_id"])
-        if oid not in id2display:
-            id2display[oid] = _normalize_display_name(_norm_name(o))
-
-    parts = []
-    # Scene overview
-    if scene_desc:
-        parts.append(f"It appears to be {', '.join(scene_desc)} in this urban street scene.")
-    else:
-        parts.append("This is an urban street scene.")
-
-    # Counts: filter out generic 'object' and rename 'infrastructure' -> 'street elements'
-    counts = {}
-    for o in cleaned_objs:
-        coarse = _coarse_label(_norm_name(o))
-        if coarse in ("part", "object"):
-            continue
-        counts[coarse] = counts.get(coarse, 0) + 1
-    if counts:
-        # limit to top 4 categories by count
-        top_counts = sorted(counts.items(), key=lambda kv: -kv[1])[:4]
-        count_phrases = []
-        for k, v in top_counts:
-            label = k
-            if k == "infrastructure":
-                label = "street element"
-            count_phrases.append(_better_pluralize_label(label, v))
-        parts.append("Notably, the scene contains " + _human_join(count_phrases) + ".")
-
-    # Layout: pick top_k_layout by salience then order left->right
+    
+    # Opening
+    parts.append("This is an urban street scene.")
+    
+    # Count summary
+    category_counts = defaultdict(int)
+    for obj in sorted_objects:
+        name = id2name.get(int(obj.get("object_id")), "")
+        if name:
+            category = SemanticCategories.categorize(name)
+            category_counts[category] += 1
+    
+    if category_counts:
+        # Remove generic "object" category from summary
+        if "object" in category_counts:
+            del category_counts["object"]
+        
+        sorted_counts = sorted(category_counts.items(), key=lambda x: -x[1])[:4]
+        count_phrases = [TextUtils.pluralize(cat, cnt) for cat, cnt in sorted_counts]
+        
+        if count_phrases:
+            parts.append("The scene contains " + TextUtils.human_join(count_phrases) + ".")
+    
+    # Layout description (top salient objects)
     layout_items = []
-    for oid, display, coarse, score in facts_objs:
-        if coarse == "part":
+    for obj in sorted_objects[:Config.MAX_LAYOUT_ITEMS]:
+        name = id2name.get(int(obj.get("object_id")), "")
+        if not name:
             continue
-        o = next((x for x in cleaned_objs if int(x["object_id"]) == int(oid)), None)
-        if not o:
-            continue
-        layout_items.append((oid, display, coarse))
-        if len(layout_items) >= top_k_layout:
-            break
+        
+        attrs = obj.get("attributes") or []
+        clean_attrs = [
+            a.strip() for a in attrs 
+            if isinstance(a, str) and len(a.strip()) > 1 and a.strip().lower() not in name.lower()
+        ]
+        
+        category = SemanticCategories.categorize(name)
+        
+        # Build descriptive phrase
+        if clean_attrs:
+            color_attrs = [a for a in clean_attrs if a.lower() in 
+                          ["red", "blue", "yellow", "black", "white", "silver", "grey", "gray", "green"]]
+            if color_attrs:
+                layout_items.append(f"{TextUtils.article_for(color_attrs[0])} {color_attrs[0]} {name}")
+            else:
+                layout_items.append(f"{TextUtils.article_for(name)} {clean_attrs[0]} {name}")
+        else:
+            layout_items.append(f"{TextUtils.article_for(name)} {name}")
+    
     if layout_items:
-        def cx_key(t):
-            o = next((x for x in cleaned_objs if int(x["object_id"]) == int(t[0])), None)
-            return _center(o)[0] if o else 0
-        ordered = sorted(layout_items, key=cx_key)
-        phrases = []
-        for oid, display, coarse in ordered:
-            display = _clean_display(display)
-            # persons get clothing phrasing
-            if coarse == "person":
-                o = next((x for x in cleaned_objs if int(x["object_id"]) == int(oid)), None)
-                clothing = _format_person_clothing(o) if o else None
-                if clothing:
-                    phrases.append(f"{_article_for('person')} person {clothing}")
-                else:
-                    phrases.append(_format_with_article_for_surface(display))
-            else:
-                phrases.append(_format_with_article_for_surface(display))
-        # join with commas and an 'and' for natural reading
-        pretty = _human_join(phrases)
-        parts.append("Visually, one can see " + pretty + ".")
-
-    # Relations: grouped and synthesized
-    grouped = {}
-    for sid, pred, oid in rels_sorted:
-        subj = next((x for x in cleaned_objs if int(x["object_id"]) == int(sid)), None)
-        obj = next((x for x in cleaned_objs if int(x["object_id"]) == int(oid)), None)
-        if not subj or not obj:
-            continue
-        pred_l = (pred or "").strip().lower()
-        obj_disp = id2display.get(int(oid), _normalize_display_name(_norm_name(obj)))
-        subj_disp = id2display.get(int(sid), _normalize_display_name(_norm_name(subj)))
-        key = (pred_l, obj_disp)
-        grouped.setdefault(key, set()).add(subj_disp)
-
+        parts.append("Visible elements include " + TextUtils.human_join(layout_items) + ".")
+    
+    # Relationships
+    # Group by (predicate, object) to create natural sentences
+    rel_groups = defaultdict(set)
+    for sid, pred, oid in normalized_rels[:max_relations * 2]:
+        rel_groups[(pred, id2name[oid])].add(id2name[sid])
+    
     rel_sentences = []
-    for (pred_l, obj_disp), subj_set in grouped.items():
-        subj_list = sorted(list(subj_set))
-        # choose subject phrase naturally, and pick correct verb agreement
-        subj_list_simple = []
-        for sname in subj_list:
-            # if the subject surface (sname) is plural, keep as-is; else add article
-            if _is_plural_surface(sname):
-                subj_list_simple.append(sname)
-            else:
-                subj_list_simple.append(f"{_article_for(sname)} {sname}")
-
-        # Determine subject phrase and correct verb: single-plural agreement handled
-        if len(subj_list_simple) == 1:
-            subj_phrase = subj_list_simple[0]
-            # If the raw subj display (without article) is plural, use 'are' else 'is'
-            verb_plur = "are" if _is_plural_surface(subj_list[0]) else "is"
+    for (pred, obj_name), subj_set in list(rel_groups.items())[:max_relations]:
+        subj_list = sorted(list(subj_set))[:2]  # Limit subjects
+        
+        if len(subj_list) == 1:
+            subj_phrase = f"The {subj_list[0]}"
+            verb = "is"
         else:
-            subj_phrase = _human_join(subj_list_simple)
-            verb_plur = "are"
-        if "park" in pred_l:
-            rel_sentences.append(f"{subj_phrase} {verb_plur} parked near the {obj_disp}.")
-        elif "wear" in pred_l:
-            rel_sentences.append(f"{subj_phrase} {verb_plur} wearing noted items.")
-        elif "hold" in pred_l or "have" in pred_l:
-            rel_sentences.append(f"{subj_phrase} {verb_plur} holding the {obj_disp}.")
-        elif pred_l in ("on", "in", "on top of"):
-            rel_sentences.append(f"{subj_phrase} {verb_plur} {pred_l} the {obj_disp}.")
-        elif pred_l in ("next to", "near", "by", "beside", "along"):
-            rel_sentences.append(f"{subj_phrase} {verb_plur} {pred_l} the {obj_disp}.")
+            subj_phrase = f"The {subj_list[0]} and {subj_list[1]}"
+            verb = "are"
+        
+        # Build sentence based on predicate
+        if pred in ("on", "near", "in", "behind", "in front of"):
+            rel_sentences.append(f"{subj_phrase} {verb} {pred} the {obj_name}.")
+        elif pred == "wearing":
+            rel_sentences.append(f"{subj_phrase} {verb} wearing {obj_name}.")
+        elif pred == "parked near":
+            rel_sentences.append(f"{subj_phrase} {verb} parked near the {obj_name}.")
         else:
-            rel_sentences.append(f"{subj_phrase} {verb_plur} {pred_l} the {obj_disp}.")
+            rel_sentences.append(f"{subj_phrase} {verb} {pred} the {obj_name}.")
+    
     if rel_sentences:
-        parts.append(" ".join(rel_sentences[:max_relations]))
+        parts.append(" ".join(rel_sentences))
+    
+    # Context-aware closing
+    if category_counts.get("person", 0) > 0:
+        parts.append("Pedestrians are visible in the scene.")
+    
+    if category_counts.get("vehicle", 0) > 1:
+        parts.append("Multiple vehicles are present.")
+    
+    parts.append("The scene depicts a typical urban environment.")
+    
+    # Final cleanup
+    text = " ".join(parts)
+    text = re.sub(r'\s+', ' ', text)
+    text = re.sub(r'\s+([.,;:])', r'\1', text)
+    text = re.sub(r'\.+', '.', text)
+    
+    return text.strip()
 
-    # Attributes: build human-friendly lines but avoid repeats with display
-    attr_lines = []
-    added = set()
-    for oid, display, coarse, sc in facts_objs:
-        o = next((x for x in cleaned_objs if int(x["object_id"]) == int(oid)), None)
-        if not o:
-            continue
-        attrs = o.get("attributes") or []
-        if not attrs:
-            continue
-        # produce a human phrase without repeating display words
-        s = _normalize_attribute_phrase(coarse, attrs, display)
-        # ensure attribute phrase doesn't repeat words in display
-        if s:
-            # skip if attribute phrase duplicates the display surface
-            disp_low = display.lower()
-            if any(tok.lower() in disp_low for tok in re.findall(r"\w+", s) if len(tok) > 1) and display.lower() in s.lower():
-                # skip duplicate style "orange parking meter that is orange"
-                continue
-            if s not in added:
-                attr_lines.append(s)
-                added.add(s)
-        if len(attr_lines) >= 4:
-            break
-    if attr_lines:
-        parts.append("Notable details include: " + "; ".join(attr_lines) + ".")
 
-    # Dynamics & conclusion
-    if counts.get("person", 0) > 0:
-        parts.append("Pedestrians appear to be standing or moving along the sidewalk.")
-    if counts.get("vehicle", 0) > 0 or counts.get("bicycle", 0) > 0:
-        parts.append("Some vehicles and bikes are parked while others occupy the road.")
-    parts.append("Overall, the scene reads as a typical urban street scene.")
+# ============================================================
+# UTILITY FUNCTIONS FOR INTEGRATION
+# ============================================================
+def compute_node_salience(entry: Dict) -> Tuple[List[float], List[int], str]:
+    """
+    Compute salience scores for all objects.
+    
+    Returns:
+        (scores, object_ids, method_name)
+    """
+    objects = entry.get("objects", [])
+    scores_dict = SalienceComputer.compute(objects)
+    
+    object_ids = [int(o.get("object_id")) for o in objects]
+    scores = [scores_dict.get(oid, 0.0) for oid in object_ids]
+    
+    return scores, object_ids, "area_centrality_combined"
 
-    paragraph = " ".join([p for p in parts if p])
-    paragraph = re.sub(r"\s+", " ", paragraph).strip()
-    paragraph = paragraph.replace(" a a ", " a ")
-    paragraph = paragraph.replace("on top of the street", "on the street")
-    paragraph = paragraph.replace("parked on the street", "parked along the curb")
-    return paragraph
 
-# ----------------------
-# Simple refinement (1-round)
-# ----------------------
-def refine_description(entry: Dict, previous_description: str, user_instruction: str) -> str:
-    inst = (user_instruction or "").lower()
-    base = generate_description_from_entry(entry)
-    if not inst:
-        return base
-    if "pedestrian" in inst or "people" in inst:
-        cleaned, facts_objs, _, _, _, _ = _serialize_cleaned_facts(entry, top_k_rels=12)
-        ppl = [t for t in facts_objs if t[2]=="person"]
-        if ppl:
-            rep = ppl[0][1]
-            return f"Focus: There are {len(ppl)} pedestrians, including {rep}. {base}"
-        return base
-    if "vehicle" in inst or "traffic" in inst:
-        cleaned, facts_objs, _, _, _, _ = _serialize_cleaned_facts(entry, top_k_rels=12)
-        veh = sum(1 for t in facts_objs if t[2]=="vehicle")
-        return f"Note: There {'is' if veh==1 else 'are'} {veh} vehicle{'s' if veh!=1 else ''} present. {base}"
-    return base + (" Note: " + user_instruction if user_instruction else "")
+def _serialize_facts(entry: Dict, max_rels: int = 20) -> Tuple:
+    """
+    Return cleaned entry and serialized facts for debugging.
+    
+    Returns:
+        (cleaned_entry, facts_objects, relations_sorted, scene_desc, id2score, method)
+    """
+    # Clean objects
+    raw_objects = entry.get("objects", [])
+    cleaned_objects = []
+    
+    for obj in raw_objects:
+        name = NameCleaner.clean_name(obj)
+        if name and GeometryUtils.bbox_area(obj) >= Config.MIN_OBJECT_AREA:
+            cleaned_objects.append(obj)
+    
+    cleaned_objects = ObjectDeduplicator.deduplicate(cleaned_objects)
+    
+    # Compute salience
+    id2score = SalienceComputer.compute(cleaned_objects)
+    
+    # Build facts list
+    facts_objs = []
+    for obj in cleaned_objects:
+        oid = int(obj.get("object_id"))
+        name = NameCleaner.clean_name(obj)
+        category = SemanticCategories.categorize(name)
+        score = id2score.get(oid, 0.0)
+        facts_objs.append((oid, name, category, score))
+    
+    # Sort by salience
+    facts_objs.sort(key=lambda x: x[3], reverse=True)
+    
+    # Build id2name
+    id2name = {int(o.get("object_id")): NameCleaner.clean_name(o) for o in cleaned_objects}
+    
+    # Collect relations
+    relations = RelationshipProcessor.collect_relations(entry, id2name)
+    rels_sorted = [(sid, RelationshipProcessor.normalize_predicate(p), oid) 
+                   for sid, p, oid in relations[:max_rels]]
+    
+    # Scene attributes
+    scene_attrs = entry.get("scene_attributes", {})
+    
+    cleaned_entry = {
+        "objects": cleaned_objects,
+        "relationships": entry.get("relationships", []),
+        "scene_attributes": scene_attrs,
+        "image_id": entry.get("image_id"),
+    }
+    
+    return (cleaned_entry, facts_objs, rels_sorted, scene_attrs, id2score, "area_centrality_combined")
 
-# ----------------------
-# Exposed utilities
-# ----------------------
-def get_cleaned_entry(entry: Dict) -> Dict:
-    return _dedupe_objects(_merge_parts_and_windows(entry))
 
-def get_runtime_info(entry: Optional[Dict] = None) -> Dict:
-    info = {"torch": False, "device": "cpu", "salience": "hybrid"}
-    if entry is not None:
-        try:
-            _, _, _, _, _, method = _serialize_cleaned_facts(entry, top_k_rels=6)
-            info["salience"] = method
-        except Exception:
-            info["salience"] = "unknown"
-    return info
-
-# CLI demo
-if __name__ == "__main__":
-    import sys
-    if len(sys.argv) > 1 and sys.argv[1].endswith(".json"):
-        with open(sys.argv[1]) as fh:
-            data = json.load(fh)
-        entry = data if isinstance(data, dict) else (data[0] if isinstance(data, list) else data)
-    else:
-        entry = {
-            "image_id": 1,
-            "objects": [
-                {"object_id": 1, "names":["person"], "attributes":["wearing red jacket"], "x":100,"y":220,"w":50,"h":150},
-                {"object_id": 2, "names":["bicycle"], "attributes":["blue","parked"], "x":160,"y":260,"w":80,"h":40},
-                {"object_id": 3, "names":["building"], "attributes":["brick"], "x":10,"y":40,"w":400,"h":600},
-                {"object_id": 4, "names":["car"], "attributes":["parked","white"], "x":300,"y":280,"w":140,"h":60}
-            ],
-            "relationships":[{"subject_id":1,"predicate":"riding","object_id":2},{"subject_id":4,"predicate":"parked next to","object_id":3}],
-            "scene_attributes":{"weather":"sunny","time_of_day":"afternoon"}
+def get_runtime_info(entry: Dict) -> Dict:
+    """Return runtime statistics."""
+    objects = entry.get("objects", [])
+    relations = entry.get("relationships", [])
+    
+    cleaned_count = sum(1 for o in objects if NameCleaner.clean_name(o))
+    
+    return {
+        "total_objects": len(objects),
+        "cleaned_objects": cleaned_count,
+        "total_relations": len(relations),
+        "config": {
+            "area_weight": Config.AREA_WEIGHT,
+            "centrality_weight": Config.CENTRALITY_WEIGHT,
+            "iou_threshold": Config.IOU_THRESHOLD,
         }
-    print("Runtime:", get_runtime_info(entry))
-    print("\nCleaned entry keys:", list(get_cleaned_entry(entry).keys()))
-    print("\nGenerated description:\n")
-    print(generate_description_from_entry(entry))
+    }
