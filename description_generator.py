@@ -284,21 +284,15 @@ def _serialize_cleaned_facts(entry: Dict, top_k_rels: int = 8):
     facts_objs = []
     for oid in ordered_ids:
         o = id2obj.get(oid)
-        if not o: continue
+        if not o: 
+            continue
         name = _norm_name(o)
         coarse = _coarse_label(name)
         if coarse == "part":
             continue
-        attrs = o.get("attributes") or []
-        display_attrs = []
-        for a in attrs:
-            al = a.strip()
-            if al and len(al) < 30 and al.lower() not in name.lower():
-                display_attrs.append(al)
-                if len(display_attrs) >= 2:
-                    break
-        display = f"{' '.join(display_attrs)} {name}".strip() if display_attrs else name
-        facts_objs.append((oid, display, coarse, id2score.get(oid,0.0)))
+        # Keep display as the canonical name only (do not embed small attributes).
+        display = name
+        facts_objs.append((oid, display, coarse, id2score.get(oid, 0.0)))
 
     def rel_score(t):
         sid,pred,oid = t
@@ -428,48 +422,174 @@ def _better_pluralize_label(label: str, n: int) -> str:
     return f"{n} {label}{'s' if n != 1 else ''}"
 
 # --- main improved realization using display names ---
-def generate_description_from_entry(entry: Dict, top_k_layout: int = 3) -> str:
+
+# -------------------------
+# Minor-tuning helpers (normalize, prune, humanize)
+# -------------------------
+def _normalize_display_name(display: str) -> str:
+    """Apply small normalizations to display names to avoid placeholders and repeated words."""
+    if not display:
+        return display
+    d = display.strip()
+    # normalize common forms
+    d = re.sub(r"\bside ?walk\b", "sidewalk", d, flags=re.I)
+    d = re.sub(r"\blamp post\b", "lamp post", d, flags=re.I)
+    d = re.sub(r"\bparking meter\b", "parking meter", d, flags=re.I)
+    d = re.sub(r"\bwork truck\b", "work truck", d, flags=re.I)
+    d = re.sub(r"\bwindow(s)?\b", "windows", d, flags=re.I)
+    d = re.sub(r"\bsign\b", "sign", d, flags=re.I)
+    # collapse duplicated adjacent words "sidewalk sidewalk" -> "sidewalk"
+    d = re.sub(r"\b(\w+)(?: \1\b)+", r"\1", d, flags=re.I)
+    return d
+
+# ---------- plural/article helpers ----------
+def _is_plural_surface(s: str) -> bool:
+    """Rudimentary plural detector for surface display tokens."""
+    if not s:
+        return False
+    s = s.strip().lower()
+    # treat obvious plurals ending with s (but ignore short words like 'us', 'as')
+    if len(s) > 3 and s.endswith("s") and not s.endswith("ss"):
+        return True
+    # some known group tokens
+    if s in ("trees","windows","bikes","people"):
+        return True
+    return False
+
+def _singularize_surface(s: str) -> str:
+    """Naive singularizer for display tokens (used only for article insertion)."""
+    if _is_plural_surface(s):
+        return s[:-1]
+    return s
+
+def _format_with_article_for_surface(display: str) -> str:
+    """Return either 'a X' or 'X' (no article) depending on plural detection."""
+    if not display:
+        return ""
+    if _is_plural_surface(display):
+        return display  # plural — do not prefix with 'a/an'
+    return f"{_article_for(display)} {display}"
+
+def _prune_relations(rels_sorted: List[Tuple[int,str,int]], cleaned_objs: List[Dict], max_rels: int = 6):
     """
-    Uses the cleaned serializer to get display names and then
-    constructs sentences using display strings (not coarse labels).
+    Prune low-value or duplicate relations from rels_sorted.
+    Keeps up to max_rels, prefers informative predicates and removes relations involving 'part' nodes.
+    """
+    def _get_obj(oid):
+        return next((x for x in cleaned_objs if int(x["object_id"]) == int(oid)), None)
+
+    seen = set()
+    out = []
+    for sid, pred, oid in rels_sorted:
+        subj = _get_obj(sid); obj = _get_obj(oid)
+        if not subj or not obj:
+            continue
+        # skip if either is a 'part' (we merge parts earlier)
+        if _coarse_label(_norm_name(subj)) == "part" or _coarse_label(_norm_name(obj)) == "part":
+            continue
+        pred_norm = (pred or "").strip().lower()
+        subj_disp = _normalize_display_name(_norm_name(subj))
+        obj_disp = _normalize_display_name(_norm_name(obj))
+        key = (pred_norm, subj_disp, obj_disp)
+        if key in seen:
+            continue
+        # deprioritize extremely generic relations if we already have enough
+        if pred_norm in ("has","have","contain","holding") and len(out) >= max_rels:
+            continue
+        seen.add(key)
+        out.append((sid, pred, oid))
+        if len(out) >= max_rels:
+            break
+    return out
+
+def _normalize_attribute_phrase(coarse: str, attrs: List[str], display: str) -> Optional[str]:
+    """
+    Build a short human-friendly attribute phrase for an object display string.
+    Returns None if nothing useful.
+    """
+    if not attrs:
+        return None
+    norm_attrs = [a.strip() for a in attrs if a and isinstance(a, str)]
+    if not norm_attrs:
+        return None
+    # vehicle headlights off -> produce explicit phrase
+    if coarse == "vehicle" and any(a.lower() == "off" for a in norm_attrs):
+        return f"{display} with headlights off"
+    # parked
+    if "parked" in [a.lower() for a in norm_attrs]:
+        return f"{display} that is parked"
+    # chained/locked bikes
+    if coarse == "bicycle" and any("chained" in a.lower() or "locked" in a.lower() for a in norm_attrs):
+        return f"{display} that is chained"
+    # parking meter color or small detail
+    if "parking meter" in display and norm_attrs:
+        return f"{display} that is {norm_attrs[0]}"
+    # otherwise show up to two concise attrs not duplicating display term
+    chosen = []
+    for a in norm_attrs:
+        if a.lower() in display.lower():
+            continue
+        if a not in chosen:
+            chosen.append(a)
+        if len(chosen) >= 2:
+            break
+    if chosen:
+        return f"{display} that is {_human_join(chosen)}"
+    return None
+
+
+def generate_description_from_entry(entry: Dict, top_k_layout: int = 3, max_relations: int = 6) -> str:
+    """
+    Deterministic description generator (minor tuned):
+     - uses name-only display tokens
+     - prunes/normalizes relations
+     - builds attribute phrases without duplication
+     - avoids counting generic 'object' and renames 'infrastructure' to 'street elements'
     """
     cleaned, facts_objs, rels_sorted, scene_desc, id2score, method = _serialize_cleaned_facts(entry, top_k_rels=24)
     cleaned_objs = cleaned.get("objects", []) if cleaned else []
 
-    # build id -> display mapping from facts_objs (prefer display there)
+    # Normalize display names in facts list (but keeps display = name)
+    facts_objs = [(oid, _normalize_display_name(display), coarse, sc) for (oid, display, coarse, sc) in facts_objs]
+
+    # Prune relations (use the helper you already added)
+    rels_sorted = _prune_relations(rels_sorted, cleaned_objs, max_rels=max_relations)
+
+    # Build id->display mapping and keep attribute lists separate
     id2display = {}
     for oid, display, coarse, score in facts_objs:
         id2display[int(oid)] = display
-
-    # fallback fills (if something wasn't in facts_objs)
     for o in cleaned_objs:
         oid = int(o["object_id"])
         if oid not in id2display:
-            id2display[oid] = _norm_name(o)
+            id2display[oid] = _normalize_display_name(_norm_name(o))
 
     parts = []
-    # scene overview
+    # Scene overview
     if scene_desc:
         parts.append(f"It appears to be {', '.join(scene_desc)} in this urban street scene.")
     else:
         parts.append("This is an urban street scene.")
 
-    # counts (use coarse but show driven labels)
+    # Counts: filter out generic 'object' and rename 'infrastructure' -> 'street elements'
     counts = {}
-    coarse_name_counts = {}
     for o in cleaned_objs:
         coarse = _coarse_label(_norm_name(o))
-        if coarse == "part":
+        if coarse in ("part", "object"):
             continue
         counts[coarse] = counts.get(coarse, 0) + 1
-        coarse_name_counts[coarse] = coarse_name_counts.get(coarse, 0) + 1
     if counts:
+        # limit to top 4 categories by count
+        top_counts = sorted(counts.items(), key=lambda kv: -kv[1])[:4]
         count_phrases = []
-        for k, v in counts.items():
-            count_phrases.append(_better_pluralize_label(k, v))
+        for k, v in top_counts:
+            label = k
+            if k == "infrastructure":
+                label = "street element"
+            count_phrases.append(_better_pluralize_label(label, v))
         parts.append("Notably, the scene contains " + _human_join(count_phrases) + ".")
 
-    # layout: top salient display items ordered left->right
+    # Layout: pick top_k_layout by salience then order left->right
     layout_items = []
     for oid, display, coarse, score in facts_objs:
         if coarse == "part":
@@ -480,7 +600,6 @@ def generate_description_from_entry(entry: Dict, top_k_layout: int = 3) -> str:
         layout_items.append((oid, display, coarse))
         if len(layout_items) >= top_k_layout:
             break
-
     if layout_items:
         def cx_key(t):
             o = next((x for x in cleaned_objs if int(x["object_id"]) == int(t[0])), None)
@@ -489,18 +608,21 @@ def generate_description_from_entry(entry: Dict, top_k_layout: int = 3) -> str:
         phrases = []
         for oid, display, coarse in ordered:
             display = _clean_display(display)
+            # persons get clothing phrasing
             if coarse == "person":
                 o = next((x for x in cleaned_objs if int(x["object_id"]) == int(oid)), None)
                 clothing = _format_person_clothing(o) if o else None
                 if clothing:
                     phrases.append(f"{_article_for('person')} person {clothing}")
                 else:
-                    phrases.append(f"{_article_for(display)} {display}")
+                    phrases.append(_format_with_article_for_surface(display))
             else:
-                phrases.append(f"{_article_for(display)} {display}")
-        parts.append("Visually, one can see " + "; ".join(phrases) + ".")
+                phrases.append(_format_with_article_for_surface(display))
+        # join with commas and an 'and' for natural reading
+        pretty = _human_join(phrases)
+        parts.append("Visually, one can see " + pretty + ".")
 
-    # relations: group by (predicate, object_display) and synthesize sentences
+    # Relations: grouped and synthesized
     grouped = {}
     for sid, pred, oid in rels_sorted:
         subj = next((x for x in cleaned_objs if int(x["object_id"]) == int(sid)), None)
@@ -508,41 +630,44 @@ def generate_description_from_entry(entry: Dict, top_k_layout: int = 3) -> str:
         if not subj or not obj:
             continue
         pred_l = (pred or "").strip().lower()
-        obj_disp = id2display.get(int(oid), _norm_name(obj))
-        subj_disp = id2display.get(int(sid), _norm_name(subj))
+        obj_disp = id2display.get(int(oid), _normalize_display_name(_norm_name(obj)))
+        subj_disp = id2display.get(int(sid), _normalize_display_name(_norm_name(subj)))
         key = (pred_l, obj_disp)
         grouped.setdefault(key, set()).add(subj_disp)
 
     rel_sentences = []
     for (pred_l, obj_disp), subj_set in grouped.items():
         subj_list = sorted(list(subj_set))
-        # small heuristic to choose subject phrase
-        if len(subj_list) == 1:
-            subj_phrase = f"{_article_for(subj_list[0])} {subj_list[0]}"
+        # choose subject phrase naturally
+        subj_list_simple = []
+        for sname in subj_list:
+            # if the subject display is plural, keep as-is; else add article
+            if _is_plural_surface(sname):
+                subj_list_simple.append(sname)
+            else:
+                subj_list_simple.append(f"{_article_for(sname)} {sname}")
+        if len(subj_list_simple) == 1:
+            subj_phrase = subj_list_simple[0]
             verb_plur = "is"
         else:
-            subj_phrase = f"{len(subj_list)} items ({_human_join(subj_list)})"
+            subj_phrase = _human_join(subj_list_simple)
             verb_plur = "are"
-        # predicate normalization
         if "park" in pred_l:
-            # "parked along the curb near the sidewalk" -> simpler phrasing
-            rel_sentences.append(f"{subj_phrase} {verb_plur} parked near {('the ' + obj_disp)}.")
-        elif "wear" in pred_l or "wears" in pred_l:
-            rel_sentences.append(f"{subj_phrase} {verb_plur} wearing items noted in the facts.")
+            rel_sentences.append(f"{subj_phrase} {verb_plur} parked near the {obj_disp}.")
+        elif "wear" in pred_l:
+            rel_sentences.append(f"{subj_phrase} {verb_plur} wearing noted items.")
         elif "hold" in pred_l or "have" in pred_l:
-            rel_sentences.append(f"{subj_phrase} {verb_plur} holding {('the ' + obj_disp)}.")
+            rel_sentences.append(f"{subj_phrase} {verb_plur} holding the {obj_disp}.")
         elif pred_l in ("on", "in", "on top of"):
-            rel_sentences.append(f"{subj_phrase} {verb_plur} {pred_l} {('the ' + obj_disp)}.")
-        elif pred_l in ("next to", "near", "by", "beside"):
-            rel_sentences.append(f"{subj_phrase} {verb_plur} {pred_l} {('the ' + obj_disp)}.")
+            rel_sentences.append(f"{subj_phrase} {verb_plur} {pred_l} the {obj_disp}.")
+        elif pred_l in ("next to", "near", "by", "beside", "along"):
+            rel_sentences.append(f"{subj_phrase} {verb_plur} {pred_l} the {obj_disp}.")
         else:
-            rel_sentences.append(f"{subj_phrase} {verb_plur} {pred_l} {('the ' + obj_disp)}.")
+            rel_sentences.append(f"{subj_phrase} {verb_plur} {pred_l} the {obj_disp}.")
     if rel_sentences:
-        # pick top 6 relation sentences
-        rel_sentences = rel_sentences[:6]
-        parts.append(" ".join(rel_sentences))
+        parts.append(" ".join(rel_sentences[:max_relations]))
 
-    # attribute details (normalize and humanize)
+    # Attributes: build human-friendly lines but avoid repeats with display
     attr_lines = []
     added = set()
     for oid, display, coarse, sc in facts_objs:
@@ -552,31 +677,24 @@ def generate_description_from_entry(entry: Dict, top_k_layout: int = 3) -> str:
         attrs = o.get("attributes") or []
         if not attrs:
             continue
-        # normalize vehicle "off" -> "headlights off"
-        if coarse == "vehicle" and any(a.lower() == "off" for a in attrs):
-            s = f"{_article_for(display)} {display} with headlights off"
-        else:
-            # build short attribute phrase (limit to 2 attrs)
-            notable = []
-            for a in attrs:
-                aa = a.strip()
-                if len(aa) > 0 and aa.lower() not in display.lower():
-                    notable.append(aa)
-                if len(notable) >= 2:
-                    break
-            if notable:
-                s = f"{_article_for(display)} {display} that is { _human_join(notable) }"
-            else:
-                s = None
-        if s and s not in added:
-            attr_lines.append(s)
-            added.add(s)
+        # produce a human phrase without repeating display words
+        s = _normalize_attribute_phrase(coarse, attrs, display)
+        # ensure attribute phrase doesn't repeat words in display
+        if s:
+            # skip if attribute phrase duplicates the display surface
+            disp_low = display.lower()
+            if any(tok.lower() in disp_low for tok in re.findall(r"\w+", s) if len(tok) > 1) and display.lower() in s.lower():
+                # skip duplicate style "orange parking meter that is orange"
+                continue
+            if s not in added:
+                attr_lines.append(s)
+                added.add(s)
         if len(attr_lines) >= 4:
             break
     if attr_lines:
         parts.append("Notable details include: " + "; ".join(attr_lines) + ".")
 
-    # dynamics + concluding sentences
+    # Dynamics & conclusion
     if counts.get("person", 0) > 0:
         parts.append("Pedestrians appear to be standing or moving along the sidewalk.")
     if counts.get("vehicle", 0) > 0 or counts.get("bicycle", 0) > 0:
@@ -585,7 +703,6 @@ def generate_description_from_entry(entry: Dict, top_k_layout: int = 3) -> str:
 
     paragraph = " ".join([p for p in parts if p])
     paragraph = re.sub(r"\s+", " ", paragraph).strip()
-    # small post-normalizations
     paragraph = paragraph.replace(" a a ", " a ")
     paragraph = paragraph.replace("on top of the street", "on the street")
     paragraph = paragraph.replace("parked on the street", "parked along the curb")
