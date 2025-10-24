@@ -23,8 +23,8 @@ get_runtime_info = None
 debug_prompt = None
 
 try:
-    from description_generator import generate_description_from_entry
-    gen_fn = generate_description_from_entry
+    from description_generator import generate_storytelling_description
+    gen_fn = generate_storytelling_description
 except Exception as e:
     st.warning(f"generate_description_from_entry not available: {e}")
 
