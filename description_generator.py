@@ -182,7 +182,7 @@ def generate_rich_description(entry):
 import random, re
 
 def generate_storytelling_description(entry):
-    """Generate a natural, comprehensive storytelling description for a scene."""
+    """Generate a natural, comprehensive description for a scene."""
     if not entry:
         return ""
 
@@ -218,7 +218,7 @@ def generate_storytelling_description(entry):
                 clean.append(a)
         return clean[:3]
 
-    # Categorize ALL objects comprehensively
+    # Categorize objects
     people = [o for o in objects if _has_name(o, ["person", "man", "woman", "child", "pedestrian"])]
     vehicles = [o for o in objects if _has_name(o, ["car", "truck", "bus", "bike", "bicycle", "vehicle", "suv", "van", "motorcycle"])]
     buildings = [o for o in objects if _has_name(o, ["building", "house", "shop", "store", "structure"])]
@@ -229,30 +229,26 @@ def generate_storytelling_description(entry):
     sky_elements = [o for o in objects if _has_name(o, ["sky", "cloud"])]
     windows = [o for o in objects if _has_name(o, ["window", "door"])]
     
-    # Track mentioned categories
-    mentioned_categories = set()
-    
-    story = []
+    description = []
 
-    # --- Atmospheric Opening ---
+    # --- Scene Setting ---
     tod = scene_attr.get("time_of_day", "").lower()
     weather = scene_attr.get("weather", "").lower()
     
     if tod in ["daytime", "afternoon"]:
         if "sunny" in weather or "clear" in weather:
-            story.append("Sunlight washes over this city street, creating a bright afternoon scene.")
+            description.append("The scene shows a city street on a sunny afternoon.")
         elif "cloudy" in weather:
-            story.append("Under an overcast sky, this urban street continues its daily rhythm.")
+            description.append("The scene shows a city street under cloudy skies.")
         else:
-            story.append("This city street is captured in the full light of day.")
+            description.append("The scene shows a city street during daytime.")
     elif tod in ["evening", "dusk"]:
-        story.append("The evening hour brings warm light to this urban street.")
+        description.append("The scene shows a city street in the evening.")
     else:
-        story.append("This is an urban street scene, alive with the details of city life.")
+        description.append("The scene shows an urban street.")
 
-    # --- Buildings & Architecture ---
+    # --- Buildings ---
     if buildings:
-        mentioned_categories.add("buildings")
         building_attrs = []
         for b in buildings[:3]:
             attrs = _get_attributes(b)
@@ -260,39 +256,36 @@ def generate_storytelling_description(entry):
         
         if len(buildings) == 1:
             if building_attrs:
-                story.append(f"A {building_attrs[0]} building rises alongside the street, its presence anchoring the scene.")
+                description.append(f"There is a {building_attrs[0]} building along the street.")
             else:
-                story.append("A building stands tall beside the road, defining the urban landscape.")
+                description.append("There is a building along the street.")
         else:
             if building_attrs:
                 unique_attrs = list(set(building_attrs[:2]))
-                story.append(f"The street is flanked by {len(buildings)} buildings — {' and '.join(unique_attrs)} structures that frame the urban corridor.")
+                description.append(f"There are {len(buildings)} buildings along the street, including {', '.join(unique_attrs)} structures.")
             else:
-                story.append(f"Rows of {len(buildings)} buildings line both sides of the street, creating the architectural boundaries of the scene.")
+                description.append(f"There are {len(buildings)} buildings along the street.")
     
-    # --- Windows & Building Details ---
+    # --- Windows ---
     if windows:
-        mentioned_categories.add("windows")
         if len(windows) == 1:
-            story.append("A window is visible in the facade.")
+            description.append("A window is visible.")
         else:
-            story.append(f"Multiple windows punctuate the building facades, catching the ambient light.")
+            description.append(f"There are multiple windows visible.")
 
     # --- Sky ---
     if sky_elements:
-        mentioned_categories.add("sky")
         sky_attrs = []
         for s in sky_elements[:2]:
             attrs = _get_attributes(s)
             sky_attrs.extend(attrs)
         if sky_attrs:
-            story.append(f"Above, the {sky_attrs[0]} sky stretches across the frame.")
+            description.append(f"The sky appears {sky_attrs[0]}.")
         else:
-            story.append("The sky forms the backdrop above the urban scene.")
+            description.append("The sky is visible in the background.")
 
-    # --- Vehicles (detailed) ---
+    # --- Vehicles ---
     if vehicles:
-        mentioned_categories.add("vehicles")
         vehicle_inventory = {}
         for v in vehicles:
             v_name = (v.get("names") or ["vehicle"])[0].lower()
@@ -325,15 +318,14 @@ def generate_storytelling_description(entry):
             vehicle_phrases.append(desc)
         
         if len(vehicle_phrases) == 1:
-            story.append(f"Parked at the curb is {vehicle_phrases[0]}, its form adding to the street's texture.")
+            description.append(f"There is {vehicle_phrases[0]} on the street.")
         elif len(vehicle_phrases) == 2:
-            story.append(f"Two vehicles occupy the street: {vehicle_phrases[0]} and {vehicle_phrases[1]}.")
+            description.append(f"There are two vehicles: {vehicle_phrases[0]} and {vehicle_phrases[1]}.")
         else:
-            story.append(f"The street hosts several vehicles — {', '.join(vehicle_phrases[:-1])}, and {vehicle_phrases[-1]} among them.")
+            description.append(f"There are several vehicles including {', '.join(vehicle_phrases[:3])}.")
 
-    # --- Trees & Greenery ---
+    # --- Trees ---
     if trees:
-        mentioned_categories.add("trees")
         tree_attrs = []
         for t in trees[:3]:
             attrs = _get_attributes(t)
@@ -341,35 +333,32 @@ def generate_storytelling_description(entry):
         
         if len(trees) == 1:
             if tree_attrs:
-                story.append(f"A {tree_attrs[0]} tree brings a touch of nature to the scene, its branches offering shade.")
+                description.append(f"There is a {tree_attrs[0]} tree.")
             else:
-                story.append("A tree rises from the sidewalk, its canopy providing organic contrast to the urban geometry.")
+                description.append("There is a tree.")
         else:
             if tree_attrs:
                 unique_attrs = list(set(tree_attrs[:2]))
-                story.append(f"Natural elements assert themselves through {len(trees)} {' and '.join(unique_attrs)} trees lining the sidewalk, their foliage softening the concrete environment.")
+                description.append(f"There are {len(trees)} trees including {', '.join(unique_attrs)} types.")
             else:
-                story.append(f"A row of {len(trees)} trees punctuates the street, bringing greenery and shade to the urban corridor.")
+                description.append(f"There are {len(trees)} trees.")
 
     # --- Signs ---
     if signs:
-        mentioned_categories.add("signs")
         if len(signs) == 1:
-            story.append("A sign stands visible, marking the space with information.")
+            description.append("There is a sign.")
         else:
-            story.append(f"Several signs are posted along the street, providing direction and context.")
+            description.append(f"There are several signs.")
 
     # --- Lights ---
     if lights:
-        mentioned_categories.add("lights")
         if len(lights) == 1:
-            story.append("A streetlight stands sentinel, ready to illuminate the evening hours.")
+            description.append("There is a streetlight.")
         else:
-            story.append(f"Multiple lights dot the scene — streetlights and signals maintaining order.")
+            description.append(f"There are multiple lights.")
 
     # --- Street Infrastructure ---
     if street_infra:
-        mentioned_categories.add("infrastructure")
         infra_names = []
         for item in street_infra[:4]:
             name = (item.get("names") or ["element"])[0].lower()
@@ -379,13 +368,12 @@ def generate_storytelling_description(entry):
         if infra_names:
             unique_infra = list(set(infra_names))
             if len(unique_infra) == 1:
-                story.append(f"The urban infrastructure includes {unique_infra[0]}.")
+                description.append(f"There is a {unique_infra[0]}.")
             else:
-                story.append(f"Street furniture populates the scene: {', '.join(unique_infra[:3])} add functional detail.")
+                description.append(f"There is street infrastructure including {', '.join(unique_infra[:3])}.")
 
-    # --- People & Activity ---
+    # --- People ---
     if people:
-        mentioned_categories.add("people")
         people_narratives = []
         seen_people = set()
         
@@ -397,7 +385,7 @@ def generate_storytelling_description(entry):
                 continue
             seen_people.add(p_name)
             
-            # Find meaningful relationships
+            # Find relationships
             p_rels = [r for r in rels if int(r.get("subject_id")) == p_id]
             
             added = False
@@ -410,12 +398,11 @@ def generate_storytelling_description(entry):
                     
                 o_name = (o.get("names") or ["object"])[0].lower()
                 
-                # Skip body parts
                 if o_name in BODY_PARTS:
                     continue
                 
                 if "near" in pred or "beside" in pred or "by" in pred or "next to" in pred:
-                    people_narratives.append(f"a {p_name} positioned near the {o_name}")
+                    people_narratives.append(f"a {p_name} near a {o_name}")
                     added = True
                     break
                 elif "hold" in pred or "carrying" in pred:
@@ -423,7 +410,7 @@ def generate_storytelling_description(entry):
                     added = True
                     break
                 elif "walk" in pred or "standing" in pred:
-                    people_narratives.append(f"a {p_name} {pred.split()[0]}ing along the street")
+                    people_narratives.append(f"a {p_name} {pred.split()[0]}ing")
                     added = True
                     break
             
@@ -436,17 +423,17 @@ def generate_storytelling_description(entry):
         
         if people_narratives:
             if len(people_narratives) == 1:
-                story.append(f"Human presence enters the frame through {people_narratives[0]}.")
+                description.append(f"There is {people_narratives[0]}.")
             elif len(people_narratives) == 2:
-                story.append(f"Two figures animate the scene: {people_narratives[0]} and {people_narratives[1]}.")
+                description.append(f"There are two people: {people_narratives[0]} and {people_narratives[1]}.")
             else:
-                story.append(f"Several people populate the street — {', '.join(people_narratives[:3])} bringing life to the urban space.")
+                description.append(f"There are several people including {', '.join(people_narratives[:3])}.")
 
     # --- Spatial Relationships ---
     rel_narratives = []
     processed = set()
     
-    for r in rels[:6]:
+    for r in rels[:4]:
         sid, oid = int(r.get("subject_id")), int(r.get("object_id"))
         pred = r.get("predicate", "").lower()
         
@@ -462,37 +449,32 @@ def generate_storytelling_description(entry):
         s_name = (s.get("names") or ["object"])[0].lower()
         o_name = (o.get("names") or ["object"])[0].lower()
         
-        # Skip person relationships (already covered)
         if s_name in ["person", "man", "woman", "child"] or o_name in ["person", "man", "woman", "child"]:
             continue
-        # Skip body parts
         if s_name in BODY_PARTS or o_name in BODY_PARTS:
             continue
         
         if "on" in pred or "atop" in pred:
-            rel_narratives.append(f"the {s_name} rests on the {o_name}")
+            rel_narratives.append(f"the {s_name} is on the {o_name}")
         elif "near" in pred or "beside" in pred:
-            rel_narratives.append(f"the {s_name} sits near the {o_name}")
+            rel_narratives.append(f"the {s_name} is near the {o_name}")
         elif "attached" in pred or "mounted" in pred:
-            rel_narratives.append(f"the {s_name} is mounted on the {o_name}")
+            rel_narratives.append(f"the {s_name} is attached to the {o_name}")
         
         processed.add(pair)
-        if len(rel_narratives) >= 3:
+        if len(rel_narratives) >= 2:
             break
     
     if rel_narratives:
-        story.append(f"Spatially, {'; '.join(rel_narratives[:3])}.")
+        description.append(f"Also, {', '.join(rel_narratives[:2])}.")
 
-    # --- Closing ---
-    closers = [
-        "This is the fabric of urban life — ordinary yet rich with detail.",
-        "The scene captures a moment of everyday city existence.",
-        "It's a slice of metropolitan life, frozen in time.",
-        "This is how the city looks when no one thinks they're watching.",
-    ]
-    story.append(random.choice(closers))
+    # --- Simple closing ---
+    if description:
+        description.append("This completes the scene description.")
+    else:
+        description.append("No significant objects were detected in the scene.")
 
-    text = " ".join(story)
+    text = " ".join(description)
     text = re.sub(r"\s+", " ", text)
     text = re.sub(r"\s+([.,;:])", r"\1", text)
     return text.strip()
