@@ -1,346 +1,149 @@
-{
-    "nodes": [
-        {
-            "id": "n1",
-            "label": "car",
+[
+    {
+        "subject": {
+            "class": "tree",
             "bbox": [
-                717.7383422851562,
-                343.01123046875,
-                799.7592163085938,
-                508.996337890625
-            ],
-            "attributes": []
+                253.72525024414062,
+                382.9183044433594,
+                540.1776123046875,
+                540.3118286132812
+            ]
         },
-        {
-            "id": "n2",
-            "label": "person",
+        "relationship": "near",
+        "object": {
+            "class": "building",
             "bbox": [
-                240.1501007080078,
-                253.8724365234375,
-                297.9226989746094,
-                513.4246215820312
-            ],
-            "attributes": []
-        },
-        {
-            "id": "n3",
-            "label": "person",
-            "bbox": [
-                382.3048400878906,
-                266.3623046875,
-                448.62005615234375,
-                515.381591796875
-            ],
-            "attributes": []
-        },
-        {
-            "id": "n4",
-            "label": "bicycle",
-            "bbox": [
-                320.7041015625,
-                317.193115234375,
-                360.2141418457031,
-                354.5675964355469
-            ],
-            "attributes": []
-        },
-        {
-            "id": "n5",
-            "label": "car",
-            "bbox": [
-                475.73822021484375,
-                315.63336181640625,
-                536.0369873046875,
-                402.61767578125
-            ],
-            "attributes": []
-        },
-        {
-            "id": "n6",
-            "label": "car",
-            "bbox": [
-                330.04461669921875,
-                290.8822937011719,
-                362.14056396484375,
-                323.9159851074219
-            ],
-            "attributes": []
-        },
-        {
-            "id": "n7",
-            "label": "truck",
-            "bbox": [
-                570.404541015625,
-                296.3252868652344,
-                768.1943969726562,
-                460.7449951171875
-            ],
-            "attributes": []
-        },
-        {
-            "id": "n8",
-            "label": "car",
-            "bbox": [
-                570.9052124023438,
-                296.2145080566406,
-                767.5652465820312,
-                460.8603515625
-            ],
-            "attributes": []
-        },
-        {
-            "id": "n9",
-            "label": "car",
-            "bbox": [
-                306.4028015136719,
-                288.97222900390625,
-                332.9768371582031,
-                313.6152648925781
-            ],
-            "attributes": []
-        },
-        {
-            "id": "n10",
-            "label": "person",
-            "bbox": [
-                307.880615234375,
-                299.690673828125,
-                319.22705078125,
-                323.5031433105469
-            ],
-            "attributes": []
+                0.4875659942626953,
+                0.5432344675064087,
+                800.3612670898438,
+                508.0704650878906
+            ]
         }
-    ],
-    "edges": [
-        {
-            "source": "n1",
-            "target": "n2",
-            "relation": "right of"
+    },
+    {
+        "subject": {
+            "class": "bench",
+            "bbox": [
+                0.7017970085144043,
+                193.91693115234375,
+                290.13873291015625,
+                507.7615966796875
+            ]
         },
-        {
-            "source": "n1",
-            "target": "n3",
-            "relation": "right of"
-        },
-        {
-            "source": "n1",
-            "target": "n4",
-            "relation": "right of"
-        },
-        {
-            "source": "n1",
-            "target": "n5",
-            "relation": "right of"
-        },
-        {
-            "source": "n1",
-            "target": "n6",
-            "relation": "right of"
-        },
-        {
-            "source": "n1",
-            "target": "n7",
-            "relation": "right of"
-        },
-        {
-            "source": "n1",
-            "target": "n8",
-            "relation": "right of"
-        },
-        {
-            "source": "n1",
-            "target": "n9",
-            "relation": "right of"
-        },
-        {
-            "source": "n1",
-            "target": "n10",
-            "relation": "right of"
-        },
-        {
-            "source": "n2",
-            "target": "n3",
-            "relation": "left of"
-        },
-        {
-            "source": "n2",
-            "target": "n4",
-            "relation": "left of"
-        },
-        {
-            "source": "n2",
-            "target": "n5",
-            "relation": "left of"
-        },
-        {
-            "source": "n2",
-            "target": "n6",
-            "relation": "left of"
-        },
-        {
-            "source": "n2",
-            "target": "n7",
-            "relation": "left of"
-        },
-        {
-            "source": "n2",
-            "target": "n8",
-            "relation": "left of"
-        },
-        {
-            "source": "n2",
-            "target": "n9",
-            "relation": "above"
-        },
-        {
-            "source": "n2",
-            "target": "n10",
-            "relation": "above"
-        },
-        {
-            "source": "n3",
-            "target": "n4",
-            "relation": "right of"
-        },
-        {
-            "source": "n3",
-            "target": "n5",
-            "relation": "left of"
-        },
-        {
-            "source": "n3",
-            "target": "n6",
-            "relation": "above"
-        },
-        {
-            "source": "n3",
-            "target": "n7",
-            "relation": "left of"
-        },
-        {
-            "source": "n3",
-            "target": "n8",
-            "relation": "left of"
-        },
-        {
-            "source": "n3",
-            "target": "n9",
-            "relation": "right of"
-        },
-        {
-            "source": "n3",
-            "target": "n10",
-            "relation": "right of"
-        },
-        {
-            "source": "n4",
-            "target": "n5",
-            "relation": "left of"
-        },
-        {
-            "source": "n4",
-            "target": "n6",
-            "relation": "above"
-        },
-        {
-            "source": "n4",
-            "target": "n7",
-            "relation": "left of"
-        },
-        {
-            "source": "n4",
-            "target": "n8",
-            "relation": "left of"
-        },
-        {
-            "source": "n4",
-            "target": "n9",
-            "relation": "above"
-        },
-        {
-            "source": "n4",
-            "target": "n10",
-            "relation": "right of"
-        },
-        {
-            "source": "n5",
-            "target": "n6",
-            "relation": "right of"
-        },
-        {
-            "source": "n5",
-            "target": "n7",
-            "relation": "left of"
-        },
-        {
-            "source": "n5",
-            "target": "n8",
-            "relation": "left of"
-        },
-        {
-            "source": "n5",
-            "target": "n9",
-            "relation": "right of"
-        },
-        {
-            "source": "n5",
-            "target": "n10",
-            "relation": "right of"
-        },
-        {
-            "source": "n6",
-            "target": "n7",
-            "relation": "left of"
-        },
-        {
-            "source": "n6",
-            "target": "n8",
-            "relation": "left of"
-        },
-        {
-            "source": "n6",
-            "target": "n9",
-            "relation": "right of"
-        },
-        {
-            "source": "n6",
-            "target": "n10",
-            "relation": "right of"
-        },
-        {
-            "source": "n7",
-            "target": "n8",
-            "relation": "right of"
-        },
-        {
-            "source": "n7",
-            "target": "n9",
-            "relation": "right of"
-        },
-        {
-            "source": "n7",
-            "target": "n10",
-            "relation": "right of"
-        },
-        {
-            "source": "n8",
-            "target": "n9",
-            "relation": "right of"
-        },
-        {
-            "source": "n8",
-            "target": "n10",
-            "relation": "right of"
-        },
-        {
-            "source": "n9",
-            "target": "n10",
-            "relation": "below"
+        "relationship": "on",
+        "object": {
+            "class": "sidewalk",
+            "bbox": [
+                0.600886344909668,
+                0.005250453948974609,
+                800.2843627929688,
+                505.34295654296875
+            ]
         }
-    ],
-    "scene_attributes": {
-        "scene_type": "urban street",
-        "weather": "sunny",
-        "time_of_day": "daytime"
+    },
+    {
+        "subject": {
+            "class": "bench",
+            "bbox": [
+                251.61151123046875,
+                380.28411865234375,
+                541.7246704101562,
+                540.896240234375
+            ]
+        },
+        "relationship": "against",
+        "object": {
+            "class": "building",
+            "bbox": [
+                -0.1985788345336914,
+                501.60565185546875,
+                799.5662841796875,
+                568.4006958007812
+            ]
+        }
+    },
+    {
+        "subject": {
+            "class": "bench",
+            "bbox": [
+                255.26904296875,
+                386.2283020019531,
+                538.3516845703125,
+                538.2679443359375
+            ]
+        },
+        "relationship": "against",
+        "object": {
+            "class": "building",
+            "bbox": [
+                0.49479007720947266,
+                -1.1093800067901611,
+                800.3443603515625,
+                507.93609619140625
+            ]
+        }
+    },
+    {
+        "subject": {
+            "class": "tree",
+            "bbox": [
+                526.5294799804688,
+                177.8724365234375,
+                793.667724609375,
+                504.7974548339844
+            ]
+        },
+        "relationship": "near",
+        "object": {
+            "class": "bench",
+            "bbox": [
+                257.4014587402344,
+                395.6804504394531,
+                527.6640625,
+                537.9285278320312
+            ]
+        }
+    },
+    {
+        "subject": {
+            "class": "tree",
+            "bbox": [
+                1.9307851791381836,
+                193.1509552001953,
+                287.333984375,
+                507.41546630859375
+            ]
+        },
+        "relationship": "has",
+        "object": {
+            "class": "trunk",
+            "bbox": [
+                103.97162628173828,
+                423.5939636230469,
+                156.53416442871094,
+                505.609130859375
+            ]
+        }
+    },
+    {
+        "subject": {
+            "class": "tree",
+            "bbox": [
+                529.7083740234375,
+                180.19175720214844,
+                794.7520141601562,
+                506.903564453125
+            ]
+        },
+        "relationship": "has",
+        "object": {
+            "class": "leaf",
+            "bbox": [
+                589.7996215820312,
+                231.30508422851562,
+                732.8724975585938,
+                376.4116516113281
+            ]
+        }
     }
-}
+]
