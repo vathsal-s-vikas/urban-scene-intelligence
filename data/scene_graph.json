@@ -1,149 +1,308 @@
-[
-    {
-        "subject": {
-            "class": "tree",
-            "bbox": [
-                253.72525024414062,
-                382.9183044433594,
-                540.1776123046875,
-                540.3118286132812
+{
+    "image_id": 1,
+    "objects": [
+        {
+            "object_id": 1,
+            "names": [
+                "tree"
+            ],
+            "synsets": [],
+            "x": 253.72525024414062,
+            "y": 382.9183044433594,
+            "w": 286.4523620605469,
+            "h": 157.39352416992188,
+            "attributes": [
+                "concrete stucco",
+                "grey concreted",
+                "concrete grind wall",
+                "concrete slab",
+                "cement wall"
             ]
         },
-        "relationship": "near",
-        "object": {
-            "class": "building",
-            "bbox": [
-                0.4875659942626953,
-                0.5432344675064087,
-                800.3612670898438,
-                508.0704650878906
-            ]
-        }
-    },
-    {
-        "subject": {
-            "class": "bench",
-            "bbox": [
-                0.7017970085144043,
-                193.91693115234375,
-                290.13873291015625,
-                507.7615966796875
+        {
+            "object_id": 2,
+            "names": [
+                "building"
+            ],
+            "synsets": [],
+            "x": 0.4875659942626953,
+            "y": 0.5432344675064087,
+            "w": 799.873701095581,
+            "h": 507.5272306203842,
+            "attributes": [
+                "grey concrete",
+                "concrete stucco",
+                "concrete building",
+                "grey and concrete",
+                "cement wall"
             ]
         },
-        "relationship": "on",
-        "object": {
-            "class": "sidewalk",
-            "bbox": [
-                0.600886344909668,
-                0.005250453948974609,
-                800.2843627929688,
-                505.34295654296875
-            ]
-        }
-    },
-    {
-        "subject": {
-            "class": "bench",
-            "bbox": [
-                251.61151123046875,
-                380.28411865234375,
-                541.7246704101562,
-                540.896240234375
+        {
+            "object_id": 3,
+            "names": [
+                "bench"
+            ],
+            "synsets": [],
+            "x": 0.7017970085144043,
+            "y": 193.91693115234375,
+            "w": 289.43693590164185,
+            "h": 313.84466552734375,
+            "attributes": [
+                "under bushes along sidewalk",
+                "grey concrete  leafed",
+                "green bush",
+                "shrubbery",
+                "shrubs"
             ]
         },
-        "relationship": "against",
-        "object": {
-            "class": "building",
-            "bbox": [
-                -0.1985788345336914,
-                501.60565185546875,
-                799.5662841796875,
-                568.4006958007812
-            ]
-        }
-    },
-    {
-        "subject": {
-            "class": "bench",
-            "bbox": [
-                255.26904296875,
-                386.2283020019531,
-                538.3516845703125,
-                538.2679443359375
+        {
+            "object_id": 4,
+            "names": [
+                "sidewalk"
+            ],
+            "synsets": [],
+            "x": 0.600886344909668,
+            "y": 0.005250453948974609,
+            "w": 799.6834764480591,
+            "h": 505.3377060890198,
+            "attributes": [
+                "grey concrete",
+                "concrete stucco",
+                "concrete building",
+                "grey and concrete",
+                "cement wall"
             ]
         },
-        "relationship": "against",
-        "object": {
-            "class": "building",
-            "bbox": [
-                0.49479007720947266,
-                -1.1093800067901611,
-                800.3443603515625,
-                507.93609619140625
-            ]
-        }
-    },
-    {
-        "subject": {
-            "class": "tree",
-            "bbox": [
-                526.5294799804688,
-                177.8724365234375,
-                793.667724609375,
-                504.7974548339844
+        {
+            "object_id": 5,
+            "names": [
+                "bench"
+            ],
+            "synsets": [],
+            "x": 251.61151123046875,
+            "y": 380.28411865234375,
+            "w": 290.1131591796875,
+            "h": 160.61212158203125,
+            "attributes": [
+                "concrete stucco",
+                "grey concreted",
+                "concrete grind wall",
+                "concrete slab",
+                "white concrete"
             ]
         },
-        "relationship": "near",
-        "object": {
-            "class": "bench",
-            "bbox": [
-                257.4014587402344,
-                395.6804504394531,
-                527.6640625,
-                537.9285278320312
-            ]
-        }
-    },
-    {
-        "subject": {
-            "class": "tree",
-            "bbox": [
-                1.9307851791381836,
-                193.1509552001953,
-                287.333984375,
-                507.41546630859375
+        {
+            "object_id": 6,
+            "names": [
+                "building"
+            ],
+            "synsets": [],
+            "x": -0.1985788345336914,
+            "y": 501.60565185546875,
+            "w": 799.7648630142212,
+            "h": 66.7950439453125,
+            "attributes": [
+                "grey concreted",
+                "concrete barrier",
+                "gray stone retaining",
+                "corkboard",
+                "fiberboard"
             ]
         },
-        "relationship": "has",
-        "object": {
-            "class": "trunk",
-            "bbox": [
-                103.97162628173828,
-                423.5939636230469,
-                156.53416442871094,
-                505.609130859375
-            ]
-        }
-    },
-    {
-        "subject": {
-            "class": "tree",
-            "bbox": [
-                529.7083740234375,
-                180.19175720214844,
-                794.7520141601562,
-                506.903564453125
+        {
+            "object_id": 7,
+            "names": [
+                "bench"
+            ],
+            "synsets": [],
+            "x": 255.26904296875,
+            "y": 386.2283020019531,
+            "w": 283.0826416015625,
+            "h": 152.03964233398438,
+            "attributes": [
+                "wall papered",
+                "grey concreted",
+                "concrete stucco",
+                "concrete slab",
+                "concrete grind wall"
             ]
         },
-        "relationship": "has",
-        "object": {
-            "class": "leaf",
-            "bbox": [
-                589.7996215820312,
-                231.30508422851562,
-                732.8724975585938,
-                376.4116516113281
+        {
+            "object_id": 8,
+            "names": [
+                "building"
+            ],
+            "synsets": [],
+            "x": 0.49479007720947266,
+            "y": -1.1093800067901611,
+            "w": 799.849570274353,
+            "h": 509.0454761981964,
+            "attributes": [
+                "grey concrete",
+                "concrete stucco",
+                "cement wall",
+                "concrete building",
+                "concrete grind wall"
+            ]
+        },
+        {
+            "object_id": 9,
+            "names": [
+                "tree"
+            ],
+            "synsets": [],
+            "x": 526.5294799804688,
+            "y": 177.8724365234375,
+            "w": 267.13824462890625,
+            "h": 326.9250183105469,
+            "attributes": [
+                "concrete stucco",
+                "cement wall",
+                "concrete ledge",
+                "grey concreted",
+                "long concrete"
+            ]
+        },
+        {
+            "object_id": 10,
+            "names": [
+                "bench"
+            ],
+            "synsets": [],
+            "x": 257.4014587402344,
+            "y": 395.6804504394531,
+            "w": 270.2626037597656,
+            "h": 142.24807739257812,
+            "attributes": [
+                "grey concreted",
+                "concrete grind wall",
+                "concrete stucco",
+                "concrete ledge",
+                "concrete slab"
+            ]
+        },
+        {
+            "object_id": 11,
+            "names": [
+                "tree"
+            ],
+            "synsets": [],
+            "x": 1.9307851791381836,
+            "y": 193.1509552001953,
+            "w": 285.4031991958618,
+            "h": 314.26451110839844,
+            "attributes": [
+                "under bushes along sidewalk",
+                "shrubbery",
+                "green bush",
+                "shrubs",
+                "grey concrete  leafed"
+            ]
+        },
+        {
+            "object_id": 12,
+            "names": [
+                "trunk"
+            ],
+            "synsets": [],
+            "x": 103.97162628173828,
+            "y": 423.5939636230469,
+            "w": 52.562538146972656,
+            "h": 82.01516723632812,
+            "attributes": [
+                "lush leafy green",
+                "green hedge",
+                "green herb",
+                "dense green",
+                "green bush"
+            ]
+        },
+        {
+            "object_id": 13,
+            "names": [
+                "tree"
+            ],
+            "synsets": [],
+            "x": 529.7083740234375,
+            "y": 180.19175720214844,
+            "w": 265.04364013671875,
+            "h": 326.71180725097656,
+            "attributes": [
+                "concrete stucco",
+                "grey concreted",
+                "cement wall",
+                "concrete ledge",
+                "grey concrete"
+            ]
+        },
+        {
+            "object_id": 14,
+            "names": [
+                "leaf"
+            ],
+            "synsets": [],
+            "x": 589.7996215820312,
+            "y": 231.30508422851562,
+            "w": 143.0728759765625,
+            "h": 145.1065673828125,
+            "attributes": [
+                "white border",
+                "white bar",
+                "faded wooden",
+                "signature on the bottom-right",
+                "ad banner"
             ]
         }
-    }
-]
+    ],
+    "relationships": [
+        {
+            "relationship_id": 1,
+            "subject_id": 1,
+            "object_id": 2,
+            "predicate": "near",
+            "synsets": []
+        },
+        {
+            "relationship_id": 2,
+            "subject_id": 3,
+            "object_id": 4,
+            "predicate": "on",
+            "synsets": []
+        },
+        {
+            "relationship_id": 3,
+            "subject_id": 5,
+            "object_id": 6,
+            "predicate": "against",
+            "synsets": []
+        },
+        {
+            "relationship_id": 4,
+            "subject_id": 7,
+            "object_id": 8,
+            "predicate": "against",
+            "synsets": []
+        },
+        {
+            "relationship_id": 5,
+            "subject_id": 9,
+            "object_id": 10,
+            "predicate": "near",
+            "synsets": []
+        },
+        {
+            "relationship_id": 6,
+            "subject_id": 11,
+            "object_id": 12,
+            "predicate": "has",
+            "synsets": []
+        },
+        {
+            "relationship_id": 7,
+            "subject_id": 13,
+            "object_id": 14,
+            "predicate": "has",
+            "synsets": []
+        }
+    ]
+}

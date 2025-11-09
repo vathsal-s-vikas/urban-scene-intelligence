@@ -1,7 +1,7 @@
 import os
 from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
-from stage2_semantic_scene_graph import semantic_graph_to_text
-import stage2_semantic_scene_graph as sg
+from scenegraph import semantic_graph_to_text
+import scenegraph as sg
 
 # ===============================
 # Load Flan-T5

@@ -41,3 +41,5 @@ models/
 # NOTE: `data/` is intentionally NOT ignored here because you said data files are okay to commit.
 # If you decide to exclude specific files under data/, add entries like:
 # data/*.sqlite3
+
+clip_model/

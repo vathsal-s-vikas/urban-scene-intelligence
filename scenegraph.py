@@ -1,11 +1,13 @@
 # stage2_scene_graph_generator.py
 import json
+from xml.parsers.expat import model
 import numpy as np
 from itertools import combinations
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torchvision.transforms as T
+from transformers import CLIPProcessor, CLIPModel
 
 from PIL import Image
 import requests
@@ -16,6 +18,8 @@ from reltr.models.transformer import Transformer
 from reltr.models.reltr import RelTR
 import os
 import torch # Import torch here
+from tqdm import tqdm
+import gc
 
 class SceneGraphGenerator:
     def __init__(self):
@@ -30,6 +34,8 @@ class SceneGraphGenerator:
         self.conv_features = None
         self.dec_attn_weights_sub = None
         self.dec_attn_weights_obj = None
+        self.scene_graph = None
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.CLASSES = [ 'N/A', 'airplane', 'animal', 'arm', 'bag', 'banana', 'basket', 'beach', 'bear', 'bed', 'bench', 'bike',
                 'bird', 'board', 'boat', 'book', 'boot', 'bottle', 'bowl', 'box', 'boy', 'branch', 'building',
                 'bus', 'cabinet', 'cap', 'car', 'cat', 'chair', 'child', 'clock', 'coat', 'counter', 'cow', 'cup',
@@ -161,12 +167,21 @@ class SceneGraphGenerator:
         self.probas_sub = probas_sub
         self.probas_obj = probas_obj
 
-        # Generate scene graph
-        scene_graph = []
+        # Initialize Visual Genome format scene graph
+        objects = []
+        relationships = []
+        object_id_map = {}
+        next_object_id = 1
+        next_relationship_id = 1
 
         # Get scaled bounding boxes using original image size
         sub_bboxes_scaled = self.rescale_bboxes(self.outputs['sub_boxes'][0, self.keep], self.original_size)
         obj_bboxes_scaled = self.rescale_bboxes(self.outputs['obj_boxes'][0, self.keep], self.original_size)
+
+        # Helper function to convert bbox format
+        def bbox_to_xywh(bbox):
+            x1, y1, x2, y2 = bbox
+            return float(x1), float(y1), float(x2 - x1), float(y2 - y1)
 
         # Ensure there are predictions to process
         if len(self.keep_queries) > 0:
@@ -174,29 +189,142 @@ class SceneGraphGenerator:
             topk = 30  # display up to 30 images
             current_indices = self.indices[:min(topk, len(self.keep_queries))]
 
-            for idx in current_indices:  # Iterate through the indices of the topk predictions in the filtered list
+            for idx in current_indices:
                 # Get the original index in the filtered list 'keep_queries'
                 original_idx = self.keep_queries[idx]
 
-                # Get the predicted relationship, subject, and object classes using the original index
+                # Get the predicted classes and relationship
                 relationship = self.REL_CLASSES[self.probas[original_idx].argmax()]
                 subject_class = self.CLASSES[self.probas_sub[original_idx].argmax()]
                 object_class = self.CLASSES[self.probas_obj[original_idx].argmax()]
 
-                # Get the scaled bounding boxes for the subject and object
-                bbox_index = current_indices.tolist().index(idx)  # Find the position of 'idx' within 'current_indices'
-                sxmin, symin, sxmax, symax = sub_bboxes_scaled[bbox_index]
-                oxmin, oymin, oxmax, oymax = obj_bboxes_scaled[bbox_index]
+                # Get the scaled bounding boxes
+                bbox_index = current_indices.tolist().index(idx)
+                subject_bbox = sub_bboxes_scaled[bbox_index].detach().cpu().tolist()
+                object_bbox = obj_bboxes_scaled[bbox_index].detach().cpu().tolist()
 
-                # Create a dictionary for the triplet (subject, relationship, object)
-                triplet = {
-                    'subject': {'class': subject_class, 'bbox': [sxmin.item(), symin.item(), sxmax.item(), symax.item()]},
-                    'relationship': relationship,
-                    'object': {'class': object_class, 'bbox': [oxmin.item(), oymin.item(), oxmax.item(), oymax.item()]}
-                }
-                scene_graph.append(triplet)
+                # Create subject object if not exists
+                subj_key = (subject_class, tuple(subject_bbox))
+                if subj_key not in object_id_map:
+                    x, y, w, h = bbox_to_xywh(subject_bbox)
+                    objects.append({
+                        "object_id": next_object_id,
+                        "names": [subject_class],
+                        "synsets": [],
+                        "x": x,
+                        "y": y,
+                        "w": w,
+                        "h": h,
+                        "attributes": []
+                    })
+                    object_id_map[subj_key] = next_object_id
+                    next_object_id += 1
 
+                # Create object if not exists
+                obj_key = (object_class, tuple(object_bbox))
+                if obj_key not in object_id_map:
+                    x, y, w, h = bbox_to_xywh(object_bbox)
+                    objects.append({
+                        "object_id": next_object_id,
+                        "names": [object_class],
+                        "synsets": [],
+                        "x": x,
+                        "y": y,
+                        "w": w,
+                        "h": h,
+                        "attributes": []
+                    })
+                    object_id_map[obj_key] = next_object_id
+                    next_object_id += 1
+
+                # Create relationship
+                relationships.append({
+                    "relationship_id": next_relationship_id,
+                    "subject_id": object_id_map[subj_key],
+                    "object_id": object_id_map[obj_key],
+                    "predicate": relationship,
+                    "synsets": []
+                })
+                next_relationship_id += 1
+
+        # Create final scene graph in Visual Genome format
+        scene_graph = {
+            "image_id": 1,  # Default image_id
+            "objects": objects,
+            "relationships": relationships
+        }
+
+        self.scene_graph = scene_graph  # Store the scene graph in the instance
         return scene_graph
+    
+    def clip_visualize_scene_graph(self):
+        """Extract visual attributes for objects in the scene graph using CLIP."""
+        if self.scene_graph is None:
+            raise ValueError("No scene graph available. Run build_scene_graph first.")
+
+        TOP_K = 5  # number of top attributes per object
+        SIM_THRESHOLD = 0.18  # discard weak matches
+        EMBEDDINGS_FILE = "C:\\Users\\SANJIV\\OneDrive\\Desktop\\PES\\SemVI\\Capstone\\SceneDesc\\urban-scene-intelligence\\clip_attribute_embeddings.pt"
+        MODEL = "C:\\Users\\SANJIV\\OneDrive\\Desktop\\PES\\SemVI\\Capstone\\SceneDesc\\urban-scene-intelligence\\clip_model"
+
+        if not os.path.exists(EMBEDDINGS_FILE):
+            raise FileNotFoundError(f"CLIP embeddings file not found: {EMBEDDINGS_FILE}")
+
+        # Loading the CLIP model
+        model = CLIPModel.from_pretrained(MODEL).to(self.device)
+        processor = CLIPProcessor.from_pretrained(MODEL)
+        model.eval()
+
+        # Convert tensor to PIL Image for cropping
+        with torch.no_grad():
+            # Get the normalized image tensor
+            img_tensor = self.img.squeeze(0)  # Remove batch dimension [C, H, W]
+            
+            # Create broadcasting-compatible mean and std tensors
+            mean = torch.tensor([0.485, 0.456, 0.406], device=img_tensor.device)
+            std = torch.tensor([0.229, 0.224, 0.225], device=img_tensor.device)
+            
+            # Reshape mean and std for broadcasting
+            mean = mean.view(-1, 1, 1)
+            std = std.view(-1, 1, 1)
+            
+            # Denormalize the image
+            img_tensor = img_tensor * std + mean
+            img_tensor = img_tensor.clamp(0, 1)
+            
+            # Convert to PIL Image format
+            img_tensor = img_tensor.cpu()
+            image_pil = T.ToPILImage()(img_tensor)
+        
+        sg = self.scene_graph
+        # Load the saved data
+        loaded_data = torch.load(EMBEDDINGS_FILE)
+
+        # Extract embeddings and vocab
+        text_embeds = loaded_data["embeddings"]
+        attribute_vocab = loaded_data["vocab"]
+
+        for obj in tqdm(sg.get("objects", []), desc="Processing objects"):
+            x, y, w, h = obj["x"], obj["y"], obj["w"], obj["h"]
+            crop = image_pil.crop((int(x), int(y), int(x + w), int(y + h)))
+            
+            image_inputs = processor(images=crop, return_tensors="pt").to(self.device)
+            with torch.no_grad():
+                image_embed = model.get_image_features(**image_inputs)
+                image_embed /= image_embed.norm(dim=-1, keepdim=True)
+                sims = (image_embed @ text_embeds.T.to(self.device)).squeeze(0).detach().cpu().numpy()
+                
+            del image_inputs, image_embed
+            torch.cuda.empty_cache()
+
+            top_indices = np.argsort(sims)[::-1][:TOP_K]
+            top_attrs = [attribute_vocab[i] for i in top_indices if sims[i] > SIM_THRESHOLD]
+            obj["attributes"] = top_attrs
+
+            gc.collect()
+
+        self.scene_graph = sg  # Update the scene graph with attributes
+        return sg
 
     def visualize_scene_graph(self, graph):
         # Use the stored features instead of extracting them again
@@ -275,6 +403,8 @@ class SceneGraphGenerator:
             json.dump(scene_graph, f, indent=4)
         print(f"✅ Scene graph saved to {output_path}")
 
+
+
 if __name__ == "__main__":
     generator = SceneGraphGenerator()
     # You need to provide an input image
@@ -282,3 +412,4 @@ if __name__ == "__main__":
     graph = generator.build_scene_graph(input_img)
     generator.save_scene_graph(graph)
     generator.visualize_scene_graph(graph)  # Optional: visualize the scene graph
+

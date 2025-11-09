@@ -43,6 +43,7 @@ if uploaded_file:
     with st.spinner("Analyzing the scene..."):
         generator = st.session_state['scene_generator']
         scene_graph = generator.build_scene_graph(img)
+        complete_scene_graph = generator.clip_visualize_scene_graph()
         
     # Option to visualize RELTR attention
     st.subheader("2️⃣ Relationship Detection Visualization")
@@ -55,7 +56,7 @@ if uploaded_file:
     # Display scene graph
     st.subheader("3️⃣ Scene Graph")
     with st.expander("View Generated Scene Graph", expanded=False):
-        st.json(scene_graph)
+        st.json(complete_scene_graph)
     
     # Generate and display description
     st.subheader("4️⃣ Scene Description")
