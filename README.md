@@ -1,8 +1,21 @@
-# Urban Scene Intelligence
+# Urban Scene Intelligence 🏙️
 
-Static urban scene understanding pipeline: upload an image, detect objects, build a semantic scene graph, generate an initial narrative description, and optionally refine it (interactive or seq2seq).
+A sophisticated urban scene understanding system that generates detailed descriptions of urban environments using advanced computer vision and natural language processing. The system employs RELTR (Relationship Transformer) for object detection and relationship understanding, enhanced by CLIP (Contrastive Language-Image Pre-Training) for rich visual attribute extraction, creating a comprehensive scene understanding pipeline.
 
----
+## Features
+
+- 🔍 **Object Detection & Relationship Understanding**: Uses RELTR to identify objects and their relationships in urban scenes
+- 🎨 **Visual Attribute Extraction**: Leverages CLIP to enrich objects with detailed visual attributes
+- �️ **Scene Graph Generation**: Creates comprehensive scene graphs with objects, relationships, and attributes
+- �️ **Attention Visualization**: Provides insights into how RELTR understands object relationships through attention maps
+- �📝 **Natural Language Description**: Generates human-readable descriptions from scene graphs
+- 🔄 **Description Refinement**: Supports interactive refinement of generated descriptions
+
+## Prerequisites
+
+- Python 3.6 or higher
+- CUDA-capable GPU (recommended for faster processing)
+- Windows/Linux operating system
 
 ## Quick start
 
@@ -13,7 +26,13 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
-2. Run the Streamlit demo
+2. Download required models
+```powershell
+# Download CLIP model and embeddings
+.\scripts\download_models.ps1
+```
+
+3. Run the Streamlit demo
 ```powershell
 streamlit run app.py
 ```
@@ -28,60 +47,52 @@ git checkout -b feature/add-readme-docs
 
 ---
 
-## High-level pipeline (stages)
+## Project Components
 
-1. Stage 1 — Object detection
-   - Input: image file (app saves uploaded image to `data/uploaded_image.jpg`).
-   - Model: YOLOv8 (small weights commonly: `yolov8s.pt`).
-   - Output: list of detection dictionaries. Each detection typically contains:
-     - `label` (string), `bbox` (x,y,w,h), `confidence` (float), optional `attributes`.
-   - Primary module: `stage1_object_detection.py` → `run_object_detection(image_path, save_output=False)`.
-   - Libraries: ultralytics / YOLOv8, torch, opencv, PIL.
+### 1. Core Scene Understanding
+- **RELTR (Relationship Transformer)**: Primary model for object detection and relationship understanding
+- **CLIP (Contrastive Language-Image Pre-Training)**: Visual attribute extraction and enhancement
+- **ResNet50**: Backbone network for feature extraction in RELTR
 
-2. Stage 2 — Semantic Scene Graph construction
-   - Input: detections (from Stage 1) + optional scene attributes (weather, time_of_day).
-   - Output: scene graph (project uses two interchange forms; canonical schema recommended below):
-     - dict with keys:
-       - `nodes`: list of { `id`, `label`, `attributes`: [..], optional `bbox` }
-       - `edges`: list of { `source`, `target`, `relation` }
-       - `scene_attributes`: { `weather`, `time_of_day`, ... }
-     - Some scripts may return a `networkx.Graph`/`DiGraph`.
-   - Primary module: `stage2_semantic_scene_graph.py` → `build_scene_graph(...)`, `save_scene_graph(...)`.
-   - Libraries: networkx, shapely (optional), numpy.
+### 2. Scene Graph Generation (`scenegraph.py`)
+- Integrates RELTR and CLIP models
+- Creates comprehensive scene graphs with:
+  - Objects and their locations
+  - Spatial relationships between objects
+  - Visual attributes for each object
+  - Confidence scores for detections
 
-3. Stage 3 — Description generation
-   - Input: canonical scene graph dict.
-   - Output: human-readable narrative description (string).
-   - Primary module: `description_generator.py` → `generate_narrative_description(graph)`.
-   - Implementation: rules / template-based and small LLM prompts. Can be replaced by generative models for better diversity.
+### 3. Description Generation (`description_generator.py`)
+- Converts scene graphs to natural language
+- Implements template-based generation
+- Handles complex spatial relationships
+- Produces coherent scene descriptions
 
-4. Stage 4 — Refinement (optional)
-   - Two modes:
-     - Streamlit one-shot refinement: UI appends user focus and re-runs `generate_narrative_description`.
-     - Seq2seq refinement using Flan-T5: build textual prompt from `scene_graph_to_text` and call `model.generate(...)`.
-   - Primary modules: `stage4_refinement.py`, `stage4_interactive_refinement.py`.
-   - Libraries: transformers, torch.
+### 4. Interactive Refinement (`stage4_refinement.py`)
+- Allows description refinement using T5 models
+- Supports focus on specific scene aspects
+- Interactive or automated refinement options
 
 ---
 
-## Project structure (current repository)
+## Project Structure
 
-- `app.py`
-  - Streamlit UI: upload, stage orchestration, one-round refinement UI.
-- `stage1_object_detection.py`
-  - YOLOv8 wrapper (detection + visualization).
-- `stage2_semantic_scene_graph.py`
-  - Build, save, and convert scene graph representations; graph → text helpers.
-- `description_generator.py`
-  - Map scene graph → narrative text.
-- `stage4_refinement.py` / `stage4_interactive_refinement.py`
-  - Seq2seq refinement (Flan-T5), interactive CLI.
-- `data/`
-  - Runtime artifacts: uploaded images, saved outputs.
-- `yolov8s.pt` (if present)
-  - YOLO weights — avoid committing large files; prefer download script or git-lfs.
-- `requirements.txt`
-  - Python package requirements.
+```
+urban-scene-intelligence/
+├── app.py                      # Streamlit web interface
+├── scenegraph.py              # Core scene graph generation
+├── description_generator.py    # Natural language generation
+├── stage4_refinement.py       # Description refinement
+├── data/                      # Runtime data storage
+│   ├── test_images/          # Sample images
+│   └── scene_graph.json      # Generated graphs
+├── scripts/                   # Utility scripts
+│   ├── download_clip.py      # CLIP model download
+│   └── download_models.ps1   # Model download orchestration
+├── clip_model/               # CLIP model files
+├── reltr/                    # RELTR model and weights
+│   └── checkpoint0149.pth    # RELTR model checkpoint
+└── requirements.txt          # Python dependencies
 
 ---
 
@@ -118,55 +129,23 @@ Add helper converters:
   - networkx
   - numpy, opencv-python, shapely (optional)
 - Models:
-  - YOLOv8 weights (e.g., `yolov8s.pt`) — detection.
+  - RelTR for scene graph generation
   - Flan-T5 (or other T5 variant) — refinement (optional).
   - Any external LLM used via API would be integrated in refinement stage.
 
 ---
 
-## How the data flows
+### Environment Setup
 
-Upload image (Streamlit) → saved to `data/uploaded_image.jpg` → Stage1 detects objects → Stage2 builds scene graph → Stage3 generates narrative → Stage4 optionally refines description with user instruction or seq2seq model.
+```powershell
+# create & activate venv (Windows PowerShell)
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+```
 
----
+2) Run the Streamlit app (manual UI testing)
 
-## Running, debugging & common pitfalls
-
-- Not a git repo: run `git init` then commit before creating branches.
-- Remote repo errors: create the GitHub repo first; then `git remote add origin <url>` and push.
-- Graph schema mismatch: some modules expect `nx.Graph`, others expect dict — add conversion helpers to avoid runtime errors.
-- Large model files: do not commit `.pt` files. Add them to `.gitignore` and provide `scripts/download_weights.ps1` to fetch them.
-- GPU: YOLO and T5 inference are much faster with CUDA-enabled GPU; CPU inference is possible but slow.
-
----
-
-## Recommended improvements (short list)
-
-- Normalize scene graph format and add conversion helpers (`usi/utils/graph_utils.py`).
-- Move scripts into a package directory (`usi/` or `src/usi`) for cleaner imports and testing.
-- Add unit tests for graph conversion, description generator, and a mocked detection wrapper.
-- Add `.gitignore`, `.gitattributes` (if using git-lfs), and a GitHub Actions CI workflow.
-- Replace committed weights with download scripts or git-lfs.
-- Add example inputs/expected outputs in `examples/` for LLM prompt testing.
-
----
-
-## Contributing
-
-- Branch naming: `feature/*`, `bugfix/*`, `docs/*`.
-- Workflow:
-  - Create feature branch, implement, commit, push, open PR into `main`.
-  - Include unit tests for new logic.
-- Keep venv (e.g., `.venv/`) in `.gitignore`.
-
----
-
-## License & attribution
-
-Add a LICENSE file appropriate to your needs (MIT recommended for permissive use).
-
----
-
-If you want, I will:
-- Create this README file on a new branch and show the exact git commands to commit & push.
-- Add `.gitignore` and a small `scripts/download_weights.ps1`.
+```powershell
+streamlit run app.py
+```

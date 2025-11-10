@@ -1,0 +1,45 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments - DO NOT commit your venv
+.venv/
+venv/
+ENV/
+env/
+env.bak/
+
+# IDEs and editors
+.vscode/
+.idea/
+
+# OS files
+Thumbs.db
+.DS_Store
+
+# Python packaging
+build/
+dist/
+*.egg-info/
+
+# Test / cache
+.pytest_cache/
+.mypy_cache/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Logs
+*.log
+
+# Model outputs and large files (recommended to keep out of git)
+runs/
+models/
+*.pt
+
+# NOTE: `data/` is intentionally NOT ignored here because you said data files are okay to commit.
+# If you decide to exclude specific files under data/, add entries like:
+# data/*.sqlite3
+
+clip_model/

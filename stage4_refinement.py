@@ -23,7 +23,7 @@ def refine_description(G, original_caption, user_prompt):
 # Example usage
 if __name__ == "__main__":
     # Load graph from Stage 2
-    import stage2_semantic_scene_graph as sg
+    import scenegraph as sg
     G = sg.generate_scene_graph_semantic("data/sample_images/street.jpg")
     
     original_caption = "car next to person"

@@ -1,239 +1,308 @@
 {
-    "nodes": [
+    "image_id": 1,
+    "objects": [
         {
-            "id": "n1",
-            "label": "car",
-            "bbox": [
-                672.9033203125,
-                174.50079345703125,
-                898.3790893554688,
-                337.0697326660156
+            "object_id": 1,
+            "names": [
+                "tree"
             ],
-            "attributes": []
+            "synsets": [],
+            "x": 253.72525024414062,
+            "y": 382.9183044433594,
+            "w": 286.4523620605469,
+            "h": 157.39352416992188,
+            "attributes": [
+                "concrete stucco",
+                "grey concreted",
+                "concrete grind wall",
+                "concrete slab",
+                "cement wall"
+            ]
         },
         {
-            "id": "n2",
-            "label": "person",
-            "bbox": [
-                111.00068664550781,
-                205.35897827148438,
-                131.2040557861328,
-                260.98565673828125
+            "object_id": 2,
+            "names": [
+                "building"
             ],
-            "attributes": []
+            "synsets": [],
+            "x": 0.4875659942626953,
+            "y": 0.5432344675064087,
+            "w": 799.873701095581,
+            "h": 507.5272306203842,
+            "attributes": [
+                "grey concrete",
+                "concrete stucco",
+                "concrete building",
+                "grey and concrete",
+                "cement wall"
+            ]
         },
         {
-            "id": "n3",
-            "label": "car",
-            "bbox": [
-                284.72796630859375,
-                214.88247680664062,
-                325.0976257324219,
-                249.0136260986328
+            "object_id": 3,
+            "names": [
+                "bench"
             ],
-            "attributes": []
+            "synsets": [],
+            "x": 0.7017970085144043,
+            "y": 193.91693115234375,
+            "w": 289.43693590164185,
+            "h": 313.84466552734375,
+            "attributes": [
+                "under bushes along sidewalk",
+                "grey concrete  leafed",
+                "green bush",
+                "shrubbery",
+                "shrubs"
+            ]
         },
         {
-            "id": "n4",
-            "label": "person",
-            "bbox": [
-                466.1009216308594,
-                203.548828125,
-                490.4681091308594,
-                254.1269073486328
+            "object_id": 4,
+            "names": [
+                "sidewalk"
             ],
-            "attributes": []
+            "synsets": [],
+            "x": 0.600886344909668,
+            "y": 0.005250453948974609,
+            "w": 799.6834764480591,
+            "h": 505.3377060890198,
+            "attributes": [
+                "grey concrete",
+                "concrete stucco",
+                "concrete building",
+                "grey and concrete",
+                "cement wall"
+            ]
         },
         {
-            "id": "n5",
-            "label": "traffic light",
-            "bbox": [
-                861.7955322265625,
-                68.92625427246094,
-                897.8505859375,
-                126.50482177734375
+            "object_id": 5,
+            "names": [
+                "bench"
             ],
-            "attributes": []
+            "synsets": [],
+            "x": 251.61151123046875,
+            "y": 380.28411865234375,
+            "w": 290.1131591796875,
+            "h": 160.61212158203125,
+            "attributes": [
+                "concrete stucco",
+                "grey concreted",
+                "concrete grind wall",
+                "concrete slab",
+                "white concrete"
+            ]
         },
         {
-            "id": "n6",
-            "label": "motorcycle",
-            "bbox": [
-                467.974609375,
-                211.72509765625,
-                489.216796875,
-                254.96670532226562
+            "object_id": 6,
+            "names": [
+                "building"
             ],
-            "attributes": []
+            "synsets": [],
+            "x": -0.1985788345336914,
+            "y": 501.60565185546875,
+            "w": 799.7648630142212,
+            "h": 66.7950439453125,
+            "attributes": [
+                "grey concreted",
+                "concrete barrier",
+                "gray stone retaining",
+                "corkboard",
+                "fiberboard"
+            ]
         },
         {
-            "id": "n7",
-            "label": "traffic light",
-            "bbox": [
-                905.4501953125,
-                11.633700370788574,
-                945.1605224609375,
-                49.62432098388672
+            "object_id": 7,
+            "names": [
+                "bench"
             ],
-            "attributes": []
+            "synsets": [],
+            "x": 255.26904296875,
+            "y": 386.2283020019531,
+            "w": 283.0826416015625,
+            "h": 152.03964233398438,
+            "attributes": [
+                "wall papered",
+                "grey concreted",
+                "concrete stucco",
+                "concrete slab",
+                "concrete grind wall"
+            ]
         },
         {
-            "id": "n8",
-            "label": "traffic light",
-            "bbox": [
-                874.8251953125,
-                67.98893737792969,
-                904.3884887695312,
-                126.09814453125
+            "object_id": 8,
+            "names": [
+                "building"
             ],
-            "attributes": []
+            "synsets": [],
+            "x": 0.49479007720947266,
+            "y": -1.1093800067901611,
+            "w": 799.849570274353,
+            "h": 509.0454761981964,
+            "attributes": [
+                "grey concrete",
+                "concrete stucco",
+                "cement wall",
+                "concrete building",
+                "concrete grind wall"
+            ]
+        },
+        {
+            "object_id": 9,
+            "names": [
+                "tree"
+            ],
+            "synsets": [],
+            "x": 526.5294799804688,
+            "y": 177.8724365234375,
+            "w": 267.13824462890625,
+            "h": 326.9250183105469,
+            "attributes": [
+                "concrete stucco",
+                "cement wall",
+                "concrete ledge",
+                "grey concreted",
+                "long concrete"
+            ]
+        },
+        {
+            "object_id": 10,
+            "names": [
+                "bench"
+            ],
+            "synsets": [],
+            "x": 257.4014587402344,
+            "y": 395.6804504394531,
+            "w": 270.2626037597656,
+            "h": 142.24807739257812,
+            "attributes": [
+                "grey concreted",
+                "concrete grind wall",
+                "concrete stucco",
+                "concrete ledge",
+                "concrete slab"
+            ]
+        },
+        {
+            "object_id": 11,
+            "names": [
+                "tree"
+            ],
+            "synsets": [],
+            "x": 1.9307851791381836,
+            "y": 193.1509552001953,
+            "w": 285.4031991958618,
+            "h": 314.26451110839844,
+            "attributes": [
+                "under bushes along sidewalk",
+                "shrubbery",
+                "green bush",
+                "shrubs",
+                "grey concrete  leafed"
+            ]
+        },
+        {
+            "object_id": 12,
+            "names": [
+                "trunk"
+            ],
+            "synsets": [],
+            "x": 103.97162628173828,
+            "y": 423.5939636230469,
+            "w": 52.562538146972656,
+            "h": 82.01516723632812,
+            "attributes": [
+                "lush leafy green",
+                "green hedge",
+                "green herb",
+                "dense green",
+                "green bush"
+            ]
+        },
+        {
+            "object_id": 13,
+            "names": [
+                "tree"
+            ],
+            "synsets": [],
+            "x": 529.7083740234375,
+            "y": 180.19175720214844,
+            "w": 265.04364013671875,
+            "h": 326.71180725097656,
+            "attributes": [
+                "concrete stucco",
+                "grey concreted",
+                "cement wall",
+                "concrete ledge",
+                "grey concrete"
+            ]
+        },
+        {
+            "object_id": 14,
+            "names": [
+                "leaf"
+            ],
+            "synsets": [],
+            "x": 589.7996215820312,
+            "y": 231.30508422851562,
+            "w": 143.0728759765625,
+            "h": 145.1065673828125,
+            "attributes": [
+                "white border",
+                "white bar",
+                "faded wooden",
+                "signature on the bottom-right",
+                "ad banner"
+            ]
         }
     ],
-    "edges": [
+    "relationships": [
         {
-            "source": "n1",
-            "target": "n2",
-            "relation": "right of"
+            "relationship_id": 1,
+            "subject_id": 1,
+            "object_id": 2,
+            "predicate": "near",
+            "synsets": []
         },
         {
-            "source": "n1",
-            "target": "n3",
-            "relation": "right of"
+            "relationship_id": 2,
+            "subject_id": 3,
+            "object_id": 4,
+            "predicate": "on",
+            "synsets": []
         },
         {
-            "source": "n1",
-            "target": "n4",
-            "relation": "right of"
+            "relationship_id": 3,
+            "subject_id": 5,
+            "object_id": 6,
+            "predicate": "against",
+            "synsets": []
         },
         {
-            "source": "n1",
-            "target": "n5",
-            "relation": "above"
+            "relationship_id": 4,
+            "subject_id": 7,
+            "object_id": 8,
+            "predicate": "against",
+            "synsets": []
         },
         {
-            "source": "n1",
-            "target": "n6",
-            "relation": "right of"
+            "relationship_id": 5,
+            "subject_id": 9,
+            "object_id": 10,
+            "predicate": "near",
+            "synsets": []
         },
         {
-            "source": "n1",
-            "target": "n7",
-            "relation": "above"
+            "relationship_id": 6,
+            "subject_id": 11,
+            "object_id": 12,
+            "predicate": "has",
+            "synsets": []
         },
         {
-            "source": "n1",
-            "target": "n8",
-            "relation": "above"
-        },
-        {
-            "source": "n2",
-            "target": "n3",
-            "relation": "left of"
-        },
-        {
-            "source": "n2",
-            "target": "n4",
-            "relation": "left of"
-        },
-        {
-            "source": "n2",
-            "target": "n5",
-            "relation": "left of"
-        },
-        {
-            "source": "n2",
-            "target": "n6",
-            "relation": "left of"
-        },
-        {
-            "source": "n2",
-            "target": "n7",
-            "relation": "left of"
-        },
-        {
-            "source": "n2",
-            "target": "n8",
-            "relation": "left of"
-        },
-        {
-            "source": "n3",
-            "target": "n4",
-            "relation": "left of"
-        },
-        {
-            "source": "n3",
-            "target": "n5",
-            "relation": "left of"
-        },
-        {
-            "source": "n3",
-            "target": "n6",
-            "relation": "left of"
-        },
-        {
-            "source": "n3",
-            "target": "n7",
-            "relation": "left of"
-        },
-        {
-            "source": "n3",
-            "target": "n8",
-            "relation": "left of"
-        },
-        {
-            "source": "n4",
-            "target": "n5",
-            "relation": "left of"
-        },
-        {
-            "source": "n4",
-            "target": "n6",
-            "relation": "below"
-        },
-        {
-            "source": "n4",
-            "target": "n7",
-            "relation": "left of"
-        },
-        {
-            "source": "n4",
-            "target": "n8",
-            "relation": "left of"
-        },
-        {
-            "source": "n5",
-            "target": "n6",
-            "relation": "right of"
-        },
-        {
-            "source": "n5",
-            "target": "n7",
-            "relation": "above"
-        },
-        {
-            "source": "n5",
-            "target": "n8",
-            "relation": "left of"
-        },
-        {
-            "source": "n6",
-            "target": "n7",
-            "relation": "left of"
-        },
-        {
-            "source": "n6",
-            "target": "n8",
-            "relation": "left of"
-        },
-        {
-            "source": "n7",
-            "target": "n8",
-            "relation": "below"
+            "relationship_id": 7,
+            "subject_id": 13,
+            "object_id": 14,
+            "predicate": "has",
+            "synsets": []
         }
-    ],
-    "scene_attributes": {
-        "scene_type": "urban street",
-        "weather": "sunny",
-        "time_of_day": "daytime"
-    }
+    ]
 }

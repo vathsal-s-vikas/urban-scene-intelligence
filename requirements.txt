@@ -1,10 +1,10 @@
-torch
-torchvision
-transformers
-pillow
-networkx
-matplotlib
-tqdm
-streamlit
-clip @ git+https://github.com/openai/CLIP.git
-sentencepiece
+torch>=1.12.0
+torchvision>=0.13.0
+numpy>=1.21.0
+Pillow>=8.4.0
+matplotlib>=3.4.0
+streamlit>=1.20.0
+requests>=2.26.0
+scipy>=1.7.0
+tqdm>=4.62.0
+transformers>=4.18.0
