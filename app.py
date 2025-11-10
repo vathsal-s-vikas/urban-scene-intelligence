@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import os
 import json
 from scenegraph import SceneGraphGenerator
-from description_generator import generate_description_from_entry
+from description_generator import generate_description, generate_storytelling_description, generate_rich_description
 
 # Configure Streamlit page
 st.set_page_config(page_title="Urban Scene Intelligence", layout="wide")
@@ -24,6 +24,12 @@ This application analyzes urban scenes using advanced computer vision and natura
 Upload an urban scene image to get started!
 """)
 
+# Add debug controls to sidebar
+st.sidebar.header("Debug Controls")
+if st.sidebar.button("Clear Session State"):
+    st.session_state.clear()
+    st.experimental_rerun()
+
 # Sidebar for image upload
 st.sidebar.header("Upload Urban Image")
 uploaded_file = st.sidebar.file_uploader("Choose an image", type=["jpg", "jpeg", "png"])
@@ -34,40 +40,50 @@ if 'scene_generator' not in st.session_state:
 
 # Main application logic
 if uploaded_file:
+    # Clear previous results when new image is uploaded
+    if 'current_image' not in st.session_state or st.session_state['current_image'] != uploaded_file:
+        st.session_state['current_image'] = uploaded_file
+        if 'scene_graph' in st.session_state: del st.session_state['scene_graph']
+        if 'complete_scene_graph' in st.session_state: del st.session_state['complete_scene_graph']
+    
     # Display uploaded image
     img = Image.open(uploaded_file)
     st.image(img, caption="Uploaded Urban Scene", use_column_width=True)
     
     # Process the image
     st.subheader("1️⃣ Scene Analysis")
-    with st.spinner("Analyzing the scene..."):
-        generator = st.session_state['scene_generator']
-        scene_graph = generator.build_scene_graph(img)
-        complete_scene_graph = generator.clip_visualize_scene_graph()
-        
+    
+    # Use session state to store processing results
+    if 'scene_graph' not in st.session_state or 'complete_scene_graph' not in st.session_state:
+        with st.spinner("Analyzing the scene..."):
+            generator = st.session_state['scene_generator']
+            st.session_state['scene_graph'] = generator.build_scene_graph(img)
+            st.session_state['complete_scene_graph'] = generator.clip_visualize_scene_graph()
+    
     # Option to visualize RELTR attention
     st.subheader("2️⃣ Relationship Detection Visualization")
     if st.button("Show Relationship Detection Visualization"):
         with st.spinner("Generating visualization..."):
-            generator.visualize_scene_graph(scene_graph)
+            st.session_state['scene_generator'].visualize_scene_graph(st.session_state['scene_graph'])
             st.pyplot(plt.gcf())
             plt.close()
     
     # Display scene graph
     st.subheader("3️⃣ Scene Graph")
     with st.expander("View Generated Scene Graph", expanded=False):
-        st.json(complete_scene_graph)
+        st.json(st.session_state['complete_scene_graph'])
     
     # Generate and display description
     st.subheader("4️⃣ Scene Description")
     if st.button("Generate Description"):
         with st.spinner("Generating natural description..."):
-            description = generate_description_from_entry(scene_graph)
-            st.text_area("📝 Generated Description", value=description, height=200)
+            if 'description' not in st.session_state:
+                st.session_state['description'] = generate_rich_description(st.session_state['scene_graph'])
+            st.text_area("📝 Generated Description", value=st.session_state['description'], height=200)
 
     # Save results
     os.makedirs("data", exist_ok=True)
-    generator.save_scene_graph(scene_graph)
+    st.session_state['scene_generator'].save_scene_graph(st.session_state['scene_graph'])
     
     # Comment out refinement section for now
     """

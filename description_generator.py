@@ -903,7 +903,7 @@ class TextUtils:
 # ============================================================
 # MAIN GENERATOR
 # ============================================================
-def generate_description_from_entry(
+def generate_description(
     entry: Dict,
     max_objects: int = None,
     max_relations: int = None,

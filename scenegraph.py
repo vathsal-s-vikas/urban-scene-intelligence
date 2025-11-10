@@ -261,6 +261,9 @@ class SceneGraphGenerator:
         """Extract visual attributes for objects in the scene graph using CLIP."""
         if self.scene_graph is None:
             raise ValueError("No scene graph available. Run build_scene_graph first.")
+        if self.scene_graph.get("attributes") is not None:
+            print("Attributes already extracted.")
+            return self.scene_graph
 
         TOP_K = 5  # number of top attributes per object
         SIM_THRESHOLD = 0.18  # discard weak matches
@@ -326,11 +329,28 @@ class SceneGraphGenerator:
         self.scene_graph = sg  # Update the scene graph with attributes
         return sg
 
-    def visualize_scene_graph(self, graph):
+    def visualize_scene_graph(self, graph, image_name=None):
+        """
+        Visualize the scene graph with attention maps and bounding boxes.
+        Args:
+            graph: The scene graph to visualize
+            image_name: Optional name of the input image for caching
+        """
+        # Check if visualization already exists
+        if image_name:
+            vis_path = os.path.join('data', 'visualizations', f"{image_name}_vis.png")
+            if os.path.exists(vis_path):
+                print("Loading cached visualization...")
+                return plt.imread(vis_path)
+
         # Use the stored features instead of extracting them again
         if self.conv_features is None or self.dec_attn_weights_sub is None or self.dec_attn_weights_obj is None:
             print("Warning: Features not available. Please process an image first.")
             return
+            
+        # Create visualizations directory if it doesn't exist
+        os.makedirs(os.path.join('data', 'visualizations'), exist_ok=True)
+        
 
         # get the feature map shape and transformed image size
         h, w = self.conv_features['0'].tensors.shape[-2:]
@@ -395,6 +415,14 @@ class SceneGraphGenerator:
 
         plt.suptitle("Blue: Subject, Orange: Object", y=1.02)
         fig.tight_layout()
+        
+        # Save the visualization if image_name is provided
+        if image_name:
+            vis_path = os.path.join('data', 'visualizations', f"{image_name}_vis.png")
+            fig.savefig(vis_path, bbox_inches='tight', dpi=300)
+            plt.close(fig)
+            return plt.imread(vis_path)
+            
         return fig  # Return the figure instead of showing it directly
 
 
