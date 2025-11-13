@@ -43,3 +43,4 @@ models/
 # data/*.sqlite3
 
 clip_model/
+data/

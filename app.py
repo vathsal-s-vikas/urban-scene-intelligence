@@ -2,6 +2,7 @@
 import streamlit as st
 from PIL import Image
 import matplotlib.pyplot as plt
+import numpy as np
 import os
 import json
 from scenegraph import SceneGraphGenerator
@@ -28,18 +29,19 @@ Upload an urban scene image to get started!
 st.sidebar.header("Debug Controls")
 if st.sidebar.button("Clear Session State"):
     st.session_state.clear()
-    st.experimental_rerun()
+    st.rerun()
 
 # Sidebar for image upload
 st.sidebar.header("Upload Urban Image")
 uploaded_file = st.sidebar.file_uploader("Choose an image", type=["jpg", "jpeg", "png"])
+st.session_state['uploaded_file_name'] = uploaded_file.name if uploaded_file else None
 
 # Initialize session state for the generator if not exists
 if 'scene_generator' not in st.session_state:
     st.session_state['scene_generator'] = SceneGraphGenerator()
 
 # Main application logic
-if uploaded_file:
+if st.session_state.get('uploaded_file_name'):
     # Clear previous results when new image is uploaded
     if 'current_image' not in st.session_state or st.session_state['current_image'] != uploaded_file:
         st.session_state['current_image'] = uploaded_file
@@ -48,6 +50,7 @@ if uploaded_file:
     
     # Display uploaded image
     img = Image.open(uploaded_file)
+
     st.image(img, caption="Uploaded Urban Scene", use_column_width=True)
     
     # Process the image
@@ -57,16 +60,25 @@ if uploaded_file:
     if 'scene_graph' not in st.session_state or 'complete_scene_graph' not in st.session_state:
         with st.spinner("Analyzing the scene..."):
             generator = st.session_state['scene_generator']
-            st.session_state['scene_graph'] = generator.build_scene_graph(img)
-            st.session_state['complete_scene_graph'] = generator.clip_visualize_scene_graph()
+            if 'scene_graph' not in st.session_state:
+                st.session_state['scene_graph'] = generator.build_scene_graph(img, st.session_state['uploaded_file_name'])
+            if 'complete_scene_graph' not in st.session_state:
+                st.session_state['complete_scene_graph'] = generator.clip_visualize_scene_graph(st.session_state['scene_graph'],st.session_state['uploaded_file_name'])
     
     # Option to visualize RELTR attention
     st.subheader("2️⃣ Relationship Detection Visualization")
     if st.button("Show Relationship Detection Visualization"):
         with st.spinner("Generating visualization..."):
-            st.session_state['scene_generator'].visualize_scene_graph(st.session_state['scene_graph'])
-            st.pyplot(plt.gcf())
-            plt.close()
+            if 'visualization' not in st.session_state:
+                # Get the figure from visualize_scene_graph
+                fig = st.session_state['scene_generator'].visualize_scene_graph(st.session_state['uploaded_file_name'])
+                # Convert matplotlib figure to image
+                fig.canvas.draw()
+                # Convert to RGB array
+                img_array = np.array(fig.canvas.renderer._renderer)
+                st.session_state['visualization'] = img_array
+                plt.close(fig)
+            st.image(st.session_state['visualization'], caption="Relationship Detection Visualization", use_column_width=True)
     
     # Display scene graph
     st.subheader("3️⃣ Scene Graph")
@@ -83,7 +95,7 @@ if uploaded_file:
 
     # Save results
     os.makedirs("data", exist_ok=True)
-    st.session_state['scene_generator'].save_scene_graph(st.session_state['scene_graph'])
+    st.session_state['scene_generator'].save_scene_graph(st.session_state['scene_graph'], st.session_state['uploaded_file_name'])
     
     # Comment out refinement section for now
     """
