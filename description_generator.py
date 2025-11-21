@@ -111,9 +111,9 @@ def generate_rich_description(entry):
         obj_counts[base] = obj_counts.get(base, 0) + 1
 
     parts = ["This is an urban street scene."]
-    if obj_counts:
-        summary = ", ".join(f"{v} {k}{'s' if v > 1 else ''}" for k, v in sorted(obj_counts.items(), key=lambda x: -x[1]))
-        parts.append(f"The scene contains {summary}.")
+    # if obj_counts:
+    #     summary = ", ".join(f"{v} {k}{'s' if v > 1 else ''}" for k, v in sorted(obj_counts.items(), key=lambda x: -x[1]))
+    #     parts.append(f"The scene contains {summary}.")
 
     # 2. Describe visible elements
     vis_elems = []
@@ -992,8 +992,9 @@ def generate_description(
         sorted_counts = sorted(category_counts.items(), key=lambda x: -x[1])[:4]
         count_phrases = [TextUtils.pluralize(cat, cnt) for cat, cnt in sorted_counts]
         
-        if count_phrases:
-            parts.append("The scene contains " + TextUtils.human_join(count_phrases) + ".")
+        # COMMENTED OUT - don't display object count summary
+        # if count_phrases:
+        #     parts.append("The scene contains " + TextUtils.human_join(count_phrases) + ".")
     
     # Layout description (top salient objects)
     layout_items = []

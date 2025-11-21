@@ -69,16 +69,17 @@ if st.session_state.get('uploaded_file_name'):
     st.subheader("2️⃣ Relationship Detection Visualization")
     if st.button("Show Relationship Detection Visualization"):
         with st.spinner("Generating visualization..."):
-            if 'visualization' not in st.session_state:
+            viz_key = st.session_state['uploaded_file_name'] + '_visualization'
+            if viz_key not in st.session_state:
                 # Get the figure from visualize_scene_graph
                 fig = st.session_state['scene_generator'].visualize_scene_graph(st.session_state['uploaded_file_name'])
                 # Convert matplotlib figure to image
                 fig.canvas.draw()
                 # Convert to RGB array
                 img_array = np.array(fig.canvas.renderer._renderer)
-                st.session_state['visualization'] = img_array
+                st.session_state[viz_key] = img_array
                 plt.close(fig)
-            st.image(st.session_state['visualization'], caption="Relationship Detection Visualization", use_column_width=True)
+            st.image(st.session_state[viz_key], caption="Relationship Detection Visualization", use_column_width=True)
     
     # Display scene graph
     st.subheader("3️⃣ Scene Graph")

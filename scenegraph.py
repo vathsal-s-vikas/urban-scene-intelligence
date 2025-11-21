@@ -527,7 +527,7 @@ class SceneGraphGenerator:
 
         TOP_K = 5  # number of top attributes per object
         SIM_THRESHOLD = 0.18  # discard weak matches
-        EMBEDDINGS_FILE = "C:\\Users\\SANJIV\\OneDrive\\Desktop\\PES\\SemVI\\Capstone\\SceneDesc\\urban-scene-intelligence\\clip_attribute_embeddings.pt"
+        EMBEDDINGS_FILE = "C:\\Users\\SANJIV\\OneDrive\\Desktop\\PES\\SemVI\\Capstone\\SceneDesc\\urban-scene-intelligence\\clip_50_attribute_embeddings.pt"
         MODEL = "C:\\Users\\SANJIV\\OneDrive\\Desktop\\PES\\SemVI\\Capstone\\SceneDesc\\urban-scene-intelligence\\clip_model"
 
         if not os.path.exists(EMBEDDINGS_FILE):
